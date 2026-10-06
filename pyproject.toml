@@ -1,0 +1,16 @@
+[project]
+name = "tios-gpu-research"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # PyPI has only a placeholder and no release tag has KumoTabular yet - pin a main commit.
+    "structured-data-models @ git+https://github.com/NVIDIA/structured-data-models.git@391961ae82b4bf54af1aca31e9fc0a0c678117ce",
+    "torch>=2.7",
+    "numpy",
+    "pandas",
+    "pyarrow",
+    "scikit-learn",
+]
+
+[tool.uv]
+package = false
