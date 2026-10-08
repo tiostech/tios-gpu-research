@@ -1,19 +1,21 @@
 """Zero-shot forecasting with NVIDIA Kumo-Tabular (in-context regression).
 
-Expects a directory with train/val/test files (parquet or csv) sharing one
-schema: a numerical target column plus feature columns (lags, calendar,
-exogenous, ...).  Kumo-Tabular has no fitting step: it reads labeled
-"context" rows and predicts "query" rows in a single forward pass.
+Expects a directory with train/val files (parquet or csv) sharing one schema:
+a numerical target column plus feature columns (lags, calendar, exogenous,
+...).  Kumo-Tabular has no fitting step: it reads labeled "context" rows and
+predicts "query" rows in a single forward pass.  Only val is forecast.
 
-  * val is predicted using train as context.
-  * test is predicted using train + val as context.
+  * static (default): all of val is predicted using train as context.
+  * --walk-forward: val is predicted one day at a time.  After each day is
+    forecast, its actual targets are appended to the context for the next day.
 
-With --time-col, rows are sorted by time and the most recent --max-context
-rows are kept as context.  Datetime columns are expanded into numeric
-features, since the model only accepts numerical/categorical inputs.
+The context is the most recent --max-context rows (sorted by --time-col if
+given).  Datetime columns are expanded into numeric features, since the model
+only accepts numerical/categorical inputs.
 
-Outputs per split: predictions parquet (mean + selected quantiles) and
-printed metrics (MAE of median, RMSE of mean, pinball loss, 80% coverage).
+Outputs: val_<mode>_predictions.parquet (mean + selected quantiles) and
+val_<mode>_metrics.json (MAE of median, RMSE of mean, pinball loss, 80%
+coverage).
 """
 
 import argparse
@@ -71,6 +73,8 @@ def predict(model, context, query, target, args, device) -> pd.DataFrame:
             x=ctx.drop_columns(target),
             y=ctx[:, target],
             num_estimators=args.num_estimators,
+            # Re-seeded per fit so each walk-forward day is reproducible.
+            generator=torch.Generator(device=device).manual_seed(args.seed),
         )
         for start in range(0, len(x_query), args.batch_size):
             batch = x_query.iloc[start : start + args.batch_size]
@@ -119,11 +123,7 @@ def smoke_data() -> dict[str, pd.DataFrame]:
         df[f"y_lag{lag}"] = df["y"].shift(lag)
     df = df.dropna().reset_index(drop=True)
     n = len(df)
-    return {
-        "train": df.iloc[: int(n * 0.7)],
-        "val": df.iloc[int(n * 0.7) : int(n * 0.85)],
-        "test": df.iloc[int(n * 0.85) :],
-    }
+    return {"train": df.iloc[: int(n * 0.8)], "val": df.iloc[int(n * 0.8) :]}
 
 
 def main() -> None:
@@ -137,6 +137,12 @@ def main() -> None:
     p.add_argument("--max-context", type=int, default=10_000)
     p.add_argument("--num-estimators", type=int, default=8)
     p.add_argument("--batch-size", type=int, default=2048)
+    p.add_argument("--seed", type=int, default=0, help="Ensemble RNG seed")
+    p.add_argument(
+        "--walk-forward",
+        action="store_true",
+        help="Forecast val day by day, adding each day's actuals to the context",
+    )
     p.add_argument("--smoke", action="store_true", help="Run on toy data")
     args = p.parse_args()
 
@@ -146,48 +152,63 @@ def main() -> None:
     else:
         if args.data_dir is None:
             p.error("--data-dir is required unless --smoke")
-        splits = {s: read_split(args.data_dir, s) for s in ("train", "val", "test")}
-        if splits["train"] is None:
-            p.error(f"no train.parquet/train.csv in {args.data_dir}")
-        splits = {k: v for k, v in splits.items() if v is not None}
+        splits = {s: read_split(args.data_dir, s) for s in ("train", "val")}
+        for name, df in splits.items():
+            if df is None:
+                p.error(f"no {name}.parquet/{name}.csv in {args.data_dir}")
+    if args.walk_forward and not args.time_col:
+        p.error("--walk-forward requires --time-col")
 
+    for name, df in splits.items():
+        df = df.drop(columns=args.drop)
+        if args.time_col:
+            df[args.time_col] = pd.to_datetime(df[args.time_col])
+            df = df.sort_values(args.time_col)
+        splits[name] = df.reset_index(drop=True)
+    train, val = splits["train"], splits["val"]
+
+    torch.manual_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = sdm.models.KumoTabular(task="regression", size=args.size, device=device)
-    args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    history = []
+    def forecast(context: pd.DataFrame, query: pd.DataFrame) -> pd.DataFrame:
+        return predict(
+            model,
+            prepare(context.tail(args.max_context), args.time_col),
+            prepare(query, args.time_col),
+            args.target,
+            args,
+            device,
+        )
+
+    if args.walk_forward:
+        mode = "walk_forward"
+        context, parts = train, []
+        days = list(val.groupby(val[args.time_col].dt.floor("D"), sort=True))
+        for i, (day, rows) in enumerate(days, 1):
+            parts.append(forecast(context, rows))
+            context = pd.concat([context, rows]).tail(args.max_context)
+            print(f"walk-forward: {i}/{len(days)} days ({day:%Y-%m-%d})")
+        quantiles = pd.concat(parts, ignore_index=True)
+    else:
+        mode = "static"
+        quantiles = forecast(train, val)
+
+    out = pd.DataFrame({"mean": quantiles.mean(axis=1)})
+    out = pd.concat([out, quantiles[SAVE_QUANTILES]], axis=1)
     results = {}
-    for name in ("train", "val", "test"):
-        if name not in splits:
-            continue
-        df = splits[name].drop(columns=args.drop)
-        if args.time_col:
-            df = df.sort_values(args.time_col).reset_index(drop=True)
-        if name != "train":
-            context = pd.concat(history, ignore_index=True)
-            if args.time_col:
-                context = context.sort_values(args.time_col)
-            context = context.tail(args.max_context)
-            quantiles = predict(
-                model,
-                prepare(context, args.time_col),
-                prepare(df, args.time_col),
-                args.target,
-                args,
-                device,
-            )
-            out = pd.DataFrame({"mean": quantiles.mean(axis=1)})
-            out = pd.concat([out, quantiles[SAVE_QUANTILES]], axis=1)
-            if args.time_col:
-                out.insert(0, args.time_col, df[args.time_col].to_numpy())
-            if args.target in df and df[args.target].notna().all():
-                out.insert(len(out.columns) - len(SAVE_QUANTILES) - 1, "y_true", df[args.target].to_numpy())
-                results[name] = metrics(df[args.target].to_numpy(), quantiles)
-                print(f"{name}: {json.dumps(results[name])}")
-            out.to_parquet(args.out_dir / f"{name}_predictions.parquet")
-        history.append(df)
+    if args.target in val and val[args.target].notna().all():
+        out.insert(0, "y_true", val[args.target].to_numpy())
+        results = metrics(val[args.target].to_numpy(), quantiles)
+        print(f"val ({mode}): {json.dumps(results)}")
+    if args.time_col:
+        out.insert(0, args.time_col, val[args.time_col].to_numpy())
 
-    (args.out_dir / "metrics.json").write_text(json.dumps(results, indent=2))
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    out.to_parquet(args.out_dir / f"val_{mode}_predictions.parquet")
+    (args.out_dir / f"val_{mode}_metrics.json").write_text(
+        json.dumps({"mode": mode, **vars(args), **results}, indent=2, default=str)
+    )
     print(f"wrote {args.out_dir}")
 
 
