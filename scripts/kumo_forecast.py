@@ -20,6 +20,7 @@ coverage).
 
 import argparse
 import json
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -44,9 +45,14 @@ def prepare(df: pd.DataFrame, time_col: str | None) -> pd.DataFrame:
     df = df.copy()
     if time_col:
         df[time_col] = pd.to_datetime(df[time_col])
+    # Parquet date columns load as object dtype holding datetime.date values.
+    for col in df.columns[df.dtypes == object]:
+        values = df[col].dropna()
+        if len(values) and values.map(lambda v: isinstance(v, date)).all():
+            df[col] = pd.to_datetime(df[col])
     for col in df.columns[df.dtypes.map(pd.api.types.is_datetime64_any_dtype)]:
         ts = df.pop(col)
-        df[f"{col}_epoch"] = ts.astype("int64") // 10**9
+        df[f"{col}_epoch"] = ts.astype("datetime64[s]").astype("int64")
         df[f"{col}_hour"] = ts.dt.hour
         df[f"{col}_dow"] = ts.dt.dayofweek
         df[f"{col}_month"] = ts.dt.month
@@ -174,7 +180,10 @@ def main() -> None:
     def forecast(context: pd.DataFrame, query: pd.DataFrame) -> pd.DataFrame:
         return predict(
             model,
-            prepare(context.tail(args.max_context), args.time_col),
+            prepare(
+                context.dropna(subset=[args.target]).tail(args.max_context),
+                args.time_col,
+            ),
             prepare(query, args.time_col),
             args.target,
             args,
@@ -197,9 +206,13 @@ def main() -> None:
     out = pd.DataFrame({"mean": quantiles.mean(axis=1)})
     out = pd.concat([out, quantiles[SAVE_QUANTILES]], axis=1)
     results = {}
-    if args.target in val and val[args.target].notna().all():
-        out.insert(0, "y_true", val[args.target].to_numpy())
-        results = metrics(val[args.target].to_numpy(), quantiles)
+    if args.target in val:
+        y = val[args.target].to_numpy(dtype=float)
+        out.insert(0, "y_true", y)
+        # Score only rows with an actual (e.g. DST gaps have no target).
+        has_y = ~np.isnan(y)
+        results = metrics(y[has_y], quantiles[has_y].reset_index(drop=True))
+        results["n_missing_target"] = int((~has_y).sum())
         print(f"val ({mode}): {json.dumps(results)}")
     if args.time_col:
         out.insert(0, args.time_col, val[args.time_col].to_numpy())
