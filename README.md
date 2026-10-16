@@ -12,12 +12,17 @@ Salt runs `just init` (`uv sync` and pre-download of the model weights). Then:
 just smoke                                   # GPU check and toy forecast
 just pull s3://<bucket>/<prefix>/my-task     # -> /scratch/data/my-task
 just forecast my-task --target y --time-col ts [--walk-forward] [--drop id_col ...] [--max-context 20000]
+just timestral my-task --target y --time-col ts [--no-covariates] [--max-context 8192] [--days 5]
 just push s3://<bucket>/<prefix>/my-task     # -> .../my-task/outputs/<UTC timestamp>/
 ```
 
 Results are written to `/scratch/outputs/my-task/`: `val_<mode>_predictions.parquet`
 (mean + quantiles) and `val_<mode>_metrics.json` (metrics + run arguments), where
 `<mode>` is `static` or `walk_forward`. `/scratch` is wiped when the instance stops.
+
+Timestral (`scripts/timestral_forecast.py`) runs the same walk-forward on the same
+features: target history as context, every other column as a known-future covariate.
+It writes `val_timestral_*` files next to Kumo's. It needs a regular time grid.
 
 ## Data layout
 

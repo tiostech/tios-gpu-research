@@ -667,6 +667,17 @@ wheels = [
 ]
 
 [[package]]
+name = "timestral"
+version = "1.0.0"
+source = { git = "https://github.com/mistralai/timestral.git?rev=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff#a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "safetensors" },
+    { name = "torch" },
+]
+
+[[package]]
 name = "tios-gpu-research"
 version = "0.1.0"
 source = { virtual = "." }
@@ -676,6 +687,7 @@ dependencies = [
     { name = "pyarrow" },
     { name = "scikit-learn" },
     { name = "structured-data-models" },
+    { name = "timestral" },
     { name = "torch" },
 ]
 
@@ -686,6 +698,7 @@ requires-dist = [
     { name = "pyarrow" },
     { name = "scikit-learn" },
     { name = "structured-data-models", git = "https://github.com/NVIDIA/structured-data-models.git?rev=391961ae82b4bf54af1aca31e9fc0a0c678117ce" },
+    { name = "timestral", git = "https://github.com/mistralai/timestral.git?rev=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff" },
     { name = "torch", specifier = ">=2.7" },
 ]
 

@@ -91,8 +91,11 @@ def predict(model, context, query, target, args, device) -> pd.DataFrame:
     return pd.concat(outs, ignore_index=True)
 
 
-def metrics(y: np.ndarray, quantiles: pd.DataFrame) -> dict[str, float]:
-    mean = quantiles.mean(axis=1).to_numpy()
+def metrics(
+    y: np.ndarray, quantiles: pd.DataFrame, mean: np.ndarray | None = None
+) -> dict[str, float]:
+    if mean is None:  # Mean of 999 evenly spaced quantiles.
+        mean = quantiles.mean(axis=1).to_numpy()
     pinball = np.mean(
         [
             np.mean(

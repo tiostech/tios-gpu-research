@@ -24,3 +24,7 @@ forecast task *args:
 # -> s3://bucket/prefix/my-task/outputs/<UTC timestamp>/ so runs never overwrite.
 push s3_uri:
     uvx --from awscli aws s3 sync {{out_dir}}/$(basename {{s3_uri}}) {{trim_end_match(s3_uri, "/")}}/outputs/$(date -u +%Y%m%dT%H%M%SZ)/
+
+# Timestral walk-forward on the same data/features, e.g. `just timestral my-task --target y --time-col ts`
+timestral task *args:
+    uv run python scripts/timestral_forecast.py --data-dir {{data_dir}}/{{task}} --out-dir {{out_dir}}/{{task}} {{args}}
