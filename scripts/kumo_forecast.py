@@ -111,6 +111,7 @@ def metrics(
     return {
         "n": len(y),
         "mae_median": float(np.mean(np.abs(y - quantiles["q500"]))),
+        "rmse_median": float(np.sqrt(np.mean((y - quantiles["q500"]) ** 2))),
         "rmse_mean": float(np.sqrt(np.mean((y - mean) ** 2))),
         "pinball_q10_q90": float(pinball),
         "coverage_80": float(np.mean((y >= lo) & (y <= hi))),
@@ -151,6 +152,12 @@ def main() -> None:
         "--walk-forward",
         action="store_true",
         help="Forecast val day by day, adding each day's actuals to the context",
+    )
+    p.add_argument(
+        "--step-days",
+        type=int,
+        default=1,
+        help="Walk forward N days at a time (faster screening; 1 = daily)",
     )
     p.add_argument("--smoke", action="store_true", help="Run on toy data")
     args = p.parse_args()
@@ -195,12 +202,17 @@ def main() -> None:
 
     if args.walk_forward:
         mode = "walk_forward"
+        if args.step_days > 1:
+            mode += f"_{args.step_days}d"
         context, parts = train, []
-        days = list(val.groupby(val[args.time_col].dt.floor("D"), sort=True))
-        for i, (day, rows) in enumerate(days, 1):
+        day = val[args.time_col].dt.floor("D")
+        day_num = (day - day.iloc[0]).dt.days
+        steps = list(val.groupby(day_num // args.step_days, sort=True))
+        for i, (_, rows) in enumerate(steps, 1):
             parts.append(forecast(context, rows))
             context = pd.concat([context, rows]).tail(args.max_context)
-            print(f"walk-forward: {i}/{len(days)} days ({day:%Y-%m-%d})")
+            last = rows[args.time_col].iloc[-1]
+            print(f"walk-forward: {i}/{len(steps)} steps (through {last:%Y-%m-%d})")
         quantiles = pd.concat(parts, ignore_index=True)
     else:
         mode = "static"
