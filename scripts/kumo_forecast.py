@@ -159,6 +159,13 @@ def main() -> None:
         default=1,
         help="Walk forward N days at a time (faster screening; 1 = daily)",
     )
+    p.add_argument(
+        "--eval-every",
+        type=int,
+        default=1,
+        help="Only forecast every Nth step (context still gets every step's "
+        "actuals), i.e. an unbiased 1/N sample of the daily walk-forward",
+    )
     p.add_argument("--smoke", action="store_true", help="Run on toy data")
     args = p.parse_args()
 
@@ -204,16 +211,22 @@ def main() -> None:
         mode = "walk_forward"
         if args.step_days > 1:
             mode += f"_{args.step_days}d"
+        if args.eval_every > 1:
+            mode += f"_every{args.eval_every}"
         context, parts = train, []
         day = val[args.time_col].dt.floor("D")
         day_num = (day - day.iloc[0]).dt.days
         steps = list(val.groupby(day_num // args.step_days, sort=True))
+        scored = []
         for i, (_, rows) in enumerate(steps, 1):
-            parts.append(forecast(context, rows))
+            if (i - 1) % args.eval_every == 0:
+                parts.append(forecast(context, rows))
+                scored.append(rows.index)
+                last = rows[args.time_col].iloc[-1]
+                print(f"walk-forward: {i}/{len(steps)} steps (through {last:%Y-%m-%d})")
             context = pd.concat([context, rows]).tail(args.max_context)
-            last = rows[args.time_col].iloc[-1]
-            print(f"walk-forward: {i}/{len(steps)} steps (through {last:%Y-%m-%d})")
         quantiles = pd.concat(parts, ignore_index=True)
+        val = val.loc[np.concatenate(scored)].reset_index(drop=True)
     else:
         mode = "static"
         quantiles = forecast(train, val)
