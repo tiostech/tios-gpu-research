@@ -24,7 +24,11 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
 - Tabulate: `python3 research/pjm/results.py` on the box.
 - `uv` is only on PATH in login shells on the box (scripts export it).
 - ssh + background job: redirect stdin (`< /dev/null`) or the ssh call hangs.
-- `--step-days 7` screening ~4 min/run alone (vs ~35 min daily). Screen at 7d, confirm at 1d.
+- DON'T screen with `--step-days 7`: stale context biases it (v0: MAE 5.82 at 7d vs 4.67
+  daily) and it flatters price-lag features. Use `--eval-every 3` instead: exact daily
+  walk-forward forecasting only every 3rd day (~12 min). Since each day's forecast depends only
+  on prior context (fixed seed), the full daily baseline restricted to the same timestamps is an
+  exact paired baseline; results.py prints dMAE / dRMSE vs it.
 - DB: MySQL via user's SSH tunnel on 127.0.0.1:3309 (`dbset("slave")`); ask user to open it.
   tios-docs rule: read-only queries on slave only, ask before querying.
 
@@ -53,6 +57,7 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
 
 ## Experiment log
 (newest last; one line per run: variant, features changed, metrics, takeaway)
+- 2026-10-17 v0 @ step 7d: MAE 5.82, RMSE(med) 12.17 -> showed 7d screening is biased; abandoned.
 
 ## Ideas backlog
 - y lags 24/48/168, same-hour-yesterday, daily mean/max of D-1, rolling 7d mean

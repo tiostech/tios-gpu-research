@@ -28,8 +28,18 @@ def score(y, q500, mean):
             np.sqrt(np.mean((y - mean) ** 2)), ok.sum())
 
 
+def boot_se(run_err, base_err, days, reps=2000, seed=0):
+    """Day-block bootstrap SE of (MAE_run - MAE_base)."""
+    d = pd.DataFrame({"d": run_err - base_err, "day": days}).dropna()
+    per_day = d.groupby("day")["d"].agg(["sum", "count"]).to_numpy()
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(per_day), (reps, len(per_day)))
+    sums = per_day[idx].sum(axis=1)
+    return float(np.std(sums[:, 0] / sums[:, 1]))
+
+
 print(f"{'run':30} {'mode':24} {'n':>5} {'MAE':>6} {'RMSEmed':>8} {'RMSEmean':>8}"
-      f" | {'baseMAE':>7} {'dMAE':>6} {'dRMSEmed':>8}")
+      f" | {'baseMAE':>7} {'dMAE':>6} {'(se)':>6} {'dRMSEmed':>8}")
 for f in sorted(root.glob("*/val_*_predictions.parquet")):
     run = pd.read_parquet(f)
     mode = f.name.removeprefix("val_").removesuffix("_predictions.parquet")
@@ -37,5 +47,7 @@ for f in sorted(root.glob("*/val_*_predictions.parquet")):
     mae, rmse_med, rmse_mean, n = score(y, run["q500"].to_numpy(), run["mean"].to_numpy())
     b = base.loc[run["ts"]]
     bmae, brmse_med, _, _ = score(y, b["q500"].to_numpy(), b["mean"].to_numpy())
+    se = boot_se(np.abs(y - run["q500"].to_numpy()), np.abs(y - b["q500"].to_numpy()),
+                 pd.to_datetime(run["ts"]).dt.floor("D").to_numpy())
     print(f"{f.parent.name:30} {mode:24} {n:5d} {mae:6.3f} {rmse_med:8.3f} {rmse_mean:8.3f}"
-          f" | {bmae:7.3f} {mae - bmae:+6.3f} {rmse_med - brmse_med:+8.3f}")
+          f" | {bmae:7.3f} {mae - bmae:+6.3f} {se:6.3f} {rmse_med - brmse_med:+8.3f}")
