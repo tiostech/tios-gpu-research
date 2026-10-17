@@ -102,6 +102,55 @@ def add_price_history(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def raw(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """Columns from the full collect_data() pull (research/pjm/collect_raw.R)."""
+    r = pd.read_parquet(ROOT / "data" / "pjm_raw.parquet")
+    r = r.assign(ts=pd.to_datetime(r["time"])).set_index("ts")
+    return r[cols].reindex(df.index)
+
+
+def onpeak_daily_mean(s: pd.Series) -> pd.Series:
+    """Mean over HE 8-23 (hour-beginning 07-22) of each day, broadcast to the day."""
+    day = s.index.floor("D")
+    on = s.where((s.index.hour >= 7) & (s.index.hour <= 22))
+    return on.groupby(day).transform("mean")
+
+
+def add_ice(df: pd.DataFrame) -> pd.DataFrame:
+    """West Hub ICE next-day on-peak price (fair as of the bid deadline; Tue-Fri only)
+    and the production ICE-RF anchor: ICE less expected West Hub congestion."""
+    x = raw(df, ["west_ice_price", "west_congestion_fc", "west_da_congestion"])
+    df["west_ice_price"] = x["west_ice_price"]
+    cong_fc = onpeak_daily_mean(x["west_congestion_fc"])
+    cong_yday = onpeak_daily_mean(lag(x["west_da_congestion"], 24))
+    df["ice_pred_da_onpeak"] = x["west_ice_price"] - (cong_fc + cong_yday) / 2
+    df["is_onpeak"] = ((df.index.hour >= 7) & (df.index.hour <= 22)).astype(float)
+    return df
+
+
+def add_rt(df: pd.DataFrame) -> pd.DataFrame:
+    """RT price history known before the D-1 deadline (lags >= 48h, D-2 and earlier)."""
+    x = raw(df, ["rt_energy_price", "da_energy_price", "is_spike"])
+    rt = x["rt_energy_price"]
+    df["rt_lag48"] = lag(rt, 48)
+    df["rt_lag168"] = lag(rt, 168)
+    df["rt_d2_mean"] = daily_lag(rt, 2, "mean")
+    df["rt_d2_max"] = daily_lag(rt, 2, "max")
+    df["rt_da_spread_d2"] = daily_lag(rt - x["da_energy_price"], 2, "mean")
+    df["spikes_d2_d8"] = pd.concat(
+        [daily_lag(x["is_spike"], d, "sum") for d in range(2, 9)], axis=1
+    ).sum(axis=1)
+    return df
+
+
+def add_congestion(df: pd.DataFrame) -> pd.DataFrame:
+    x = raw(df, ["west_congestion_fc", "west_da_congestion", "solarduckcurve_lag1_diff_pjm"])
+    df["west_congestion_fc"] = x["west_congestion_fc"]
+    df["west_da_congestion_lag24"] = lag(x["west_da_congestion"], 24)
+    df["solarduckcurve_lag1_diff_pjm"] = x["solarduckcurve_lag1_diff_pjm"]
+    return df
+
+
 def drop_redundant(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=["dt", "dt_ordinal", "hr"])
 
@@ -113,6 +162,9 @@ VARIANTS = {
     "v3_lags_deltas_slim": [add_price_lags, add_fundamental_deltas, drop_redundant],
     "v4_v3_calendar": [add_price_lags, add_fundamental_deltas, drop_redundant, add_calendar],
     "v5_v3_history": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history],
+    "r1_ice": [add_ice],
+    "r2_rt": [add_rt],
+    "r3_cong": [add_congestion],
 }
 
 
