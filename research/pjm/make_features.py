@@ -199,6 +199,13 @@ def add_congestion(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_deltas_only(df: pd.DataFrame) -> pd.DataFrame:
+    """Fundamental deltas without keeping the price-lag block (y_lag24 is needed
+    internally for the heat-rate / gas-scaled anchor features)."""
+    df["y_lag24"] = lag(df["y"], 24)
+    return add_fundamental_deltas(df)
+
+
 def drop_redundant(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=["dt", "dt_ordinal", "hr"])
 
@@ -210,6 +217,7 @@ VARIANTS = {
     "v3_lags_deltas_slim": [add_price_lags, add_fundamental_deltas, drop_redundant],
     "v4_v3_calendar": [add_price_lags, add_fundamental_deltas, drop_redundant, add_calendar],
     "v5_v3_history": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history],
+    "v6_deltas_only": [add_deltas_only, drop_redundant],
     "r1_ice": [add_ice],
     "r2_rt": [add_rt],
     "r3_cong": [add_congestion],
