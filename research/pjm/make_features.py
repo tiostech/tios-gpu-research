@@ -206,6 +206,24 @@ def add_deltas_only(df: pd.DataFrame) -> pd.DataFrame:
     return add_fundamental_deltas(df)
 
 
+FUNDAMENTALS = [
+    "pjm_load", "pjm_wind", "pjm_solar", "pjm_gen_on_outage", "blended_gasprice",
+    "feelslike_weightedavg", "thermal_stress_all_pjm", "thermal_stress_all_miso",
+    "thermal_stress_all_spp", "north_external_stress", "south_external_stress",
+    "iir_daily_nuclear_outage",
+]
+
+
+def add_broad_deltas(df: pd.DataFrame) -> pd.DataFrame:
+    """Day-over-day and week-over-week changes of every fundamental, plus hourly ramps."""
+    for c in FUNDAMENTALS:
+        df[f"{c}_d24"] = df[c] - lag(df[c], 24)
+        df[f"{c}_d168"] = df[c] - lag(df[c], 168)
+    for c in ("pjm_load", "net_load", "pjm_solar", "thermal_stress_all_pjm"):
+        df[f"{c}_ramp1"] = df[c] - lag(df[c], 1)
+    return df
+
+
 def drop_redundant(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=["dt", "dt_ordinal", "hr"])
 
@@ -218,6 +236,8 @@ VARIANTS = {
     "v4_v3_calendar": [add_price_lags, add_fundamental_deltas, drop_redundant, add_calendar],
     "v5_v3_history": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history],
     "v6_deltas_only": [add_deltas_only, drop_redundant],
+    "v7_v5_broad_deltas": [add_price_lags, add_fundamental_deltas, drop_redundant,
+                           add_price_history, add_broad_deltas],
     "r1_ice": [add_ice],
     "r2_rt": [add_rt],
     "r3_cong": [add_congestion],
