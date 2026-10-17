@@ -58,6 +58,13 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
 ## Experiment log
 (newest last; one line per run: variant, features changed, metrics, takeaway)
 - 2026-10-17 v0 @ step 7d: MAE 5.82, RMSE(med) 12.17 -> showed 7d screening is biased; abandoned.
+- Screening = `--eval-every 3` (122 days, 2928 h), paired vs daily baseline; day-block bootstrap
+  SE of dMAE ~0.11 -> only effects >~0.25 are detectable in a screen; confirm with full daily runs.
+- v0 every3: MAE 4.799 = baseline subsample exactly (dMAE 0.000) -> paired method validated.
+- v1_price_lags every3: MAE 4.892 (dMAE +0.093 +- 0.110), dRMSE(med) +0.30 -> price lags do NOT
+  help (daily-refreshed context already carries recent prices); slight harm, within noise.
+- Raw pull (data/pjm_raw.parquet) matches original dataset exactly on 2025. West Hub ICE next-day
+  price: Tue-Fri only (55% of 2025 hours), corr 0.966 with DA on-peak mean -> strong anchor.
 
 ## Ideas backlog
 - y lags 24/48/168, same-hour-yesterday, daily mean/max of D-1, rolling 7d mean
