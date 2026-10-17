@@ -73,6 +73,35 @@ def add_fundamental_deltas(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_calendar(df: pd.DataFrame) -> pd.DataFrame:
+    """NERC holidays (observed) and weekend flags."""
+    from pandas.tseries.holiday import USFederalHolidayCalendar
+
+    cal = USFederalHolidayCalendar()
+    nerc = {"New Year's Day", "Memorial Day", "Independence Day", "Labor Day",
+            "Thanksgiving Day", "Christmas Day"}
+    days = df.index.floor("D")
+    rules = [r for r in cal.rules if r.name in nerc]
+    holidays = pd.DatetimeIndex([])
+    for r in rules:
+        holidays = holidays.union(r.dates(days.min(), days.max()))
+    df["is_holiday"] = days.isin(holidays).astype(float)
+    df["is_weekend_or_holiday"] = ((days.dayofweek >= 5) | days.isin(holidays)).astype(float)
+    return df
+
+
+def add_price_history(df: pd.DataFrame) -> pd.DataFrame:
+    y = df["y"]
+    df["y_d2_mean"] = daily_lag(y, 2, "mean")
+    df["y_d1_std"] = daily_lag(y, 1, "std")
+    df["y_7d_mean"] = pd.concat([daily_lag(y, d, "mean") for d in range(1, 8)], axis=1).mean(axis=1)
+    df["y_samehour_7d_max"] = pd.concat([lag(y, 24 * d) for d in range(1, 8)], axis=1).max(axis=1)
+    df["y_samehour_7d_min"] = pd.concat([lag(y, 24 * d) for d in range(1, 8)], axis=1).min(axis=1)
+    df["y_d1_vs_d2"] = df["y_d1_mean"] - df["y_d2_mean"]
+    df["y_lag24_vs_7d"] = df["y_lag24"] - df["y_samehour_7d_mean"]
+    return df
+
+
 def drop_redundant(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=["dt", "dt_ordinal", "hr"])
 
@@ -82,6 +111,8 @@ VARIANTS = {
     "v1_price_lags": [add_price_lags],
     "v2_lags_deltas": [add_price_lags, add_fundamental_deltas],
     "v3_lags_deltas_slim": [add_price_lags, add_fundamental_deltas, drop_redundant],
+    "v4_v3_calendar": [add_price_lags, add_fundamental_deltas, drop_redundant, add_calendar],
+    "v5_v3_history": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history],
 }
 
 

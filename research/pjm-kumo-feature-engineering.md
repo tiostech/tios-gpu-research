@@ -12,6 +12,22 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
 - Metrics: script prints `mae_median` (MAE of q500) and `rmse_mean`; the R comparison
   in tios-quant-shiny uses RMSE of q500 as well. Report both MAE(q500), RMSE(q500), RMSE(mean).
 
+## Workflow (how to run things)
+- Build variants locally: `uv run python research/pjm/make_features.py <variant>` (reads
+  repo-root train/val/test parquet = original dataset; writes data/pjm-fe/<variant>/).
+  Variant `v0` reproduces the original val exactly (checked).
+- Copy to box: `rsync -az data/pjm-fe/ tiostech@10.0.92.46:/scratch/data/pjm-fe/`
+- Box repo is checked out on branch `pjm-feature-engineering`; `git pull` there after pushing.
+- Run sequentially (g5.xlarge = 4 vCPU / 15 GB RAM; concurrent runs are CPU-bound and
+  slower in total): `nohup research/pjm/queue.sh "v1_price_lags 7" "v2 1 v2_daily" < /dev/null &`
+  Logs: /scratch/logs/<name>_<step>d.log and /scratch/logs/queue.log.
+- Tabulate: `python3 research/pjm/results.py` on the box.
+- `uv` is only on PATH in login shells on the box (scripts export it).
+- ssh + background job: redirect stdin (`< /dev/null`) or the ssh call hangs.
+- `--step-days 7` screening ~4 min/run alone (vs ~35 min daily). Screen at 7d, confirm at 1d.
+- DB: MySQL via user's SSH tunnel on 127.0.0.1:3309 (`dbset("slave")`); ask user to open it.
+  tios-docs rule: read-only queries on slave only, ask before querying.
+
 ## Data source
 - Original dataset columns = subset of `PjmFlexDaep20261001$collect_data()` in
   ~/dev/tios-quant-shiny/lib/trader-forecasting/pjm-flex-daep-20261001.R
