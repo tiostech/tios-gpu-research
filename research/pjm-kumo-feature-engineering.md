@@ -68,6 +68,9 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
   v4 (+calendar) -0.099 / -0.80; v5 (+price history) -0.108+-0.14 / -0.92+-0.51.
   -> fundamental deltas (net_load_delta24, thermal_stress_delta24, heat_rate_lag24,
   y_lag24_gas_scaled) drive an RMSE gain (~1.9 se); MAE gains within noise. v6 = deltas only queued.
+- Batch 2 (raw pull, each on top of v0): r1_ice +0.016+-0.06 / -0.23+-0.26 (ICE days MAE 5.46->5.42,
+  non-ICE days 3.97->4.05: small, not a lever); r2_rt +0.018 / +0.26; r3_cong +0.043 / +0.13 -> no gain.
+- Queued: v7 = v5 + d24/d168 deltas of all fundamentals + ramps; context 20k for v5 and v0.
 - Config pull (data/pjm_config.parquet, 68 cols): regional PJM load/wind/solar, gas hubs, coal
   basins, thermal capacity, neighbor (MISO/SPP/NYISO/ISONE/TVA/SOCO) fundamentals.
 - Raw pull (data/pjm_raw.parquet) matches original dataset exactly on 2025. West Hub ICE next-day
