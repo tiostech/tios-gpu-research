@@ -109,6 +109,54 @@ def raw(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     return r[cols].reindex(df.index)
 
 
+def cfg(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """Columns from the full dafc-20261001 config pull (research/pjm/collect_config.R)."""
+    r = pd.read_parquet(ROOT / "data" / "pjm_config.parquet")
+    r = r.assign(ts=pd.to_datetime(r["time"])).set_index("ts")
+    return r[cols].reindex(df.index)
+
+
+MF = ".meteologica.forecast."
+
+
+def add_regional(df: pd.DataFrame) -> pd.DataFrame:
+    regional = [f"load_{r}{MF}pjm" for r in ("southern", "western", "midatlantic")]
+    regional += [f"wind_{r}{MF}pjm" for r in ("western", "midatlantic", "south")]
+    regional += [f"solar_{r}{MF}pjm" for r in ("midatlantic", "south", "west")]
+    x = cfg(df, regional + ["thermal_capacity_all.eia.forecast.pjm"])
+    for c in regional:
+        df[c.replace(MF, "_")] = x[c]
+    df["pjm_thermal_capacity"] = x["thermal_capacity_all.eia.forecast.pjm"]
+    net_load = df["pjm_load"] - df["pjm_wind"].fillna(0) - df["pjm_solar"].fillna(0)
+    df["supply_cushion"] = df["pjm_thermal_capacity"] - df["pjm_gen_on_outage"] - net_load
+    df["supply_cushion_ratio"] = df["supply_cushion"] / net_load
+    return df
+
+
+def add_fuels(df: pd.DataFrame) -> pd.DataFrame:
+    cols = [f"gas_price_{h}.ice.forecast.pjm" for h in ("domsouth", "tetco", "transco_z6_ny", "chicago")]
+    cols += ["central_app", "illiois_basin", "northern_app"]
+    x = cfg(df, cols)
+    for c in cols:
+        df[c.removesuffix(".ice.forecast.pjm")] = x[c]
+    return df
+
+
+def add_neighbors(df: pd.DataFrame) -> pd.DataFrame:
+    cols = []
+    for m in ("miso", "spp"):
+        cols += [f"load_all{MF}{m}", f"wind_all{MF}{m}", f"solar_all{MF}{m}",
+                 f"genonoutage_region_all.iso.forecast.{m}", f"thermal_capacity_all.eia.forecast.{m}"]
+    for m in ("nyiso", "isone"):
+        cols += [f"load_all{MF}{m}", f"wind_all{MF}{m}", f"solar_all{MF}{m}"]
+    for m in ("tva", "soco"):
+        cols += [f"load_all{MF}{m}", f"solar_all{MF}{m}"]
+    x = cfg(df, cols)
+    for c in cols:
+        df[c.replace(MF, "_").replace(".iso.forecast.", "_").replace(".eia.forecast.", "_")] = x[c]
+    return df
+
+
 def onpeak_daily_mean(s: pd.Series) -> pd.Series:
     """Mean over HE 8-23 (hour-beginning 07-22) of each day, broadcast to the day."""
     day = s.index.floor("D")
@@ -165,6 +213,9 @@ VARIANTS = {
     "r1_ice": [add_ice],
     "r2_rt": [add_rt],
     "r3_cong": [add_congestion],
+    "c1_regional": [add_regional],
+    "c2_fuels": [add_fuels],
+    "c3_neighbors": [add_neighbors],
 }
 
 
