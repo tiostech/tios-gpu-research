@@ -70,7 +70,18 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
   y_lag24_gas_scaled) drive an RMSE gain (~1.9 se); MAE gains within noise. v6 = deltas only queued.
 - Batch 2 (raw pull, each on top of v0): r1_ice +0.016+-0.06 / -0.23+-0.26 (ICE days MAE 5.46->5.42,
   non-ICE days 3.97->4.05: small, not a lever); r2_rt +0.018 / +0.26; r3_cong +0.043 / +0.13 -> no gain.
-- Queued: v7 = v5 + d24/d168 deltas of all fundamentals + ramps; context 20k for v5 and v0.
+- Batch 3 (every3, dMAE+-se / dRMSEmed+-se): c1_regional -0.080+-0.12 / +0.02; c2_fuels -0.008 / -0.14;
+  c3_neighbors +0.153 / +1.33 (bad); v6_deltas_only -0.053 / -0.55; v7_v5_broad_deltas -0.085 / -0.48;
+  v0_ctx20k -0.146+-0.11 / -0.71+-0.36; v5_ctx20k +0.263 / +1.70 (one blow-up day, 2025-01-22 MAE 72).
+- KEY: 2025 errors are dominated by a few spike days (01-19, 01-22, 06-24, 07-30). Robust view
+  (dMAE excluding the 5 worst baseline days / day win-rate): delta variants v2-v6 are +0.09..+0.12
+  WORSE on typical days and win only on spike days; v0_ctx20k +0.04 (spike-only too);
+  c1_regional is the only one better on typical days (-0.110, win 0.57).
+- Ensembles (mean of q500 across runs, every3): v0_ctx20k+v7 MAE 4.556 (-0.243), RMSE 8.97;
+  v0_ctx20k+c1+v7 -0.241, excl5 -0.132, win 0.63; all 9 decent runs -0.185 (no selection).
+  -> averaging different feature sets is the biggest lever so far. Caveat: pair selection is in-sample
+  and part could be seed-variance reduction -> control: v0 seed 1 averaged with v0 seed 0.
+- Queued: v0_seed1, v8 (v5 + regional), c1_ctx20k, v0 ctx 30k / 15k.
 - Config pull (data/pjm_config.parquet, 68 cols): regional PJM load/wind/solar, gas hubs, coal
   basins, thermal capacity, neighbor (MISO/SPP/NYISO/ISONE/TVA/SOCO) fundamentals.
 - Raw pull (data/pjm_raw.parquet) matches original dataset exactly on 2025. West Hub ICE next-day
