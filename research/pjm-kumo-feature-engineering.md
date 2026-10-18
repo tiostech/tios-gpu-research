@@ -81,7 +81,16 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
   v0_ctx20k+c1+v7 -0.241, excl5 -0.132, win 0.63; all 9 decent runs -0.185 (no selection).
   -> averaging different feature sets is the biggest lever so far. Caveat: pair selection is in-sample
   and part could be seed-variance reduction -> control: v0 seed 1 averaged with v0 seed 0.
-- Queued: v0_seed1, v8 (v5 + regional), c1_ctx20k, v0 ctx 30k / 15k.
+- Batch 4 (every3, dMAE+-se, excl5, RMSEmed):
+  v0_seed1 +0.096+-0.054 (!) -> SEED NOISE ~0.1 MAE for a single run; the day-bootstrap SE does not
+  include it, so single-run differences < ~0.15 are not trustworthy.
+  Context curve v0: 10k 0, 15k -0.042, 20k -0.146, 30k -0.013 -> non-monotonic, 20k likely partly luck.
+  v8_v5_regional -0.212+-0.14 (RMSE 8.83); c1_ctx20k -0.221+-0.13 (RMSE 8.97).
+  Ensembles: v0+v0_seed1 +0.040 (seed averaging gives nothing) -> ensemble gains come from
+  feature-set diversity. Best: v0_ctx20k + c1_ctx20k + v8 MAE 4.474 (-0.325+-0.117, excl5 -0.130,
+  RMSE 8.73 vs 9.77); v0_ctx20k+c1_ctx20k+v7 -0.282.
+- Confirming (full daily, the 2/3 of days not used for selection act as a holdout):
+  v8_daily, c1_ctx20k_daily, v0_ctx20k_daily -> evaluate the 3-way mean ensemble vs baseline 4.67 / 9.49.
 - Config pull (data/pjm_config.parquet, 68 cols): regional PJM load/wind/solar, gas hubs, coal
   basins, thermal capacity, neighbor (MISO/SPP/NYISO/ISONE/TVA/SOCO) fundamentals.
 - Raw pull (data/pjm_raw.parquet) matches original dataset exactly on 2025. West Hub ICE next-day
