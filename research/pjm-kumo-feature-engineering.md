@@ -89,8 +89,17 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
   Ensembles: v0+v0_seed1 +0.040 (seed averaging gives nothing) -> ensemble gains come from
   feature-set diversity. Best: v0_ctx20k + c1_ctx20k + v8 MAE 4.474 (-0.325+-0.117, excl5 -0.130,
   RMSE 8.73 vs 9.77); v0_ctx20k+c1_ctx20k+v7 -0.282.
-- Confirming (full daily, the 2/3 of days not used for selection act as a holdout):
-  v8_daily, c1_ctx20k_daily, v0_ctx20k_daily -> evaluate the 3-way mean ensemble vs baseline 4.67 / 9.49.
+- CONFIRMED (full daily 2025, 8759 h; dMAE+-se vs baseline 4.672 / RMSEmed 9.494):
+  v0_ctx20k_daily 4.630 (-0.042+-0.07) RMSE 9.06; c1_ctx20k_daily 4.529 (-0.143+-0.08) RMSE 9.02;
+  v8_daily 4.570 (-0.102+-0.12) RMSE 9.23;
+  ENSEMBLE3 (mean of the 3 runs' quantiles, research/pjm/ensemble.py) MAE 4.459 (-0.213+-0.08,
+  -4.6%), RMSE 8.865 (-6.6%), wins 61% of days, excl5 -0.110, 80% coverage 0.879 (base 0.869).
+  Holdout (243 days never used for screening/selection): ENSEMBLE3 4.452 vs 4.608 (-0.157+-0.10),
+  RMSE 8.93 vs 9.36, wins 62% of days (~3.7 binomial se) -> real, modest improvement.
+  Single runs shrink a lot from screen to holdout (seed/selection noise); the ensemble holds up best.
+  Predictions: box /scratch/outputs/pjm-fe/ens3_daily, S3 .../kumo-tabular/pjm-fe/.
+- Current best = ENSEMBLE3. Next ideas: more diverse members (different context sizes / feature
+  sets / seeds per member), weight members, re-screen features as ensemble members not alone.
 - Config pull (data/pjm_config.parquet, 68 cols): regional PJM load/wind/solar, gas hubs, coal
   basins, thermal capacity, neighbor (MISO/SPP/NYISO/ISONE/TVA/SOCO) fundamentals.
 - Raw pull (data/pjm_raw.parquet) matches original dataset exactly on 2025. West Hub ICE next-day
