@@ -244,6 +244,8 @@ VARIANTS = {
     "c1_regional": [add_regional],
     "c2_fuels": [add_fuels],
     "c3_neighbors": [add_neighbors],
+    "v8_v5_regional": [add_price_lags, add_fundamental_deltas, drop_redundant,
+                       add_price_history, add_regional],
 }
 
 
