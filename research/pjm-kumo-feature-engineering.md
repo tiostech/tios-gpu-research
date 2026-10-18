@@ -97,7 +97,9 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
   Holdout (243 days never used for screening/selection): ENSEMBLE3 4.452 vs 4.608 (-0.157+-0.10),
   RMSE 8.93 vs 9.36, wins 62% of days (~3.7 binomial se) -> real, modest improvement.
   Single runs shrink a lot from screen to holdout (seed/selection noise); the ensemble holds up best.
-  Predictions: box /scratch/outputs/pjm-fe/ens3_daily, S3 .../kumo-tabular/pjm-fe/.
+  Predictions: box /scratch/outputs/pjm-fe/ens3_daily (+ members), copied to local outputs/pjm-fe/.
+  Box instance role has NO s3:PutObject (AccessDenied on pjm-fe/ and pjm/outputs/) -> uploads must be
+  done by the user; feature data is reproducible via make_features.py.
 - Current best = ENSEMBLE3. Next ideas: more diverse members (different context sizes / feature
   sets / seeds per member), weight members, re-screen features as ensemble members not alone.
 - Config pull (data/pjm_config.parquet, 68 cols): regional PJM load/wind/solar, gas hubs, coal
