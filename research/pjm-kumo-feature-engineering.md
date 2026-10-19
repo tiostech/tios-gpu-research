@@ -106,8 +106,20 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
   basins, thermal capacity, neighbor (MISO/SPP/NYISO/ISONE/TVA/SOCO) fundamentals.
 - Raw pull (data/pjm_raw.parquet) matches original dataset exactly on 2025. West Hub ICE next-day
   price: Tue-Fri only (55% of 2025 hours), corr 0.966 with DA on-peak mean -> strong anchor.
+- Round 2 (2026-10-19, every3; dMAE vs v0 seed0 = 4.799):
+  SEED CORRECTION: v0 seed1 4.895, v0 est16 seed0 4.873, est16 seed1 4.894 -> v0 seed0 was lucky;
+  a typical v0 is ~4.88. est16 cuts seed spread 0.10 -> 0.02 (no accuracy gain) -> screen with
+  --num-estimators 16 from now on, baseline = mean of e_est16 seeds 0/1.
+  Target transforms (on v0): asinh:20 4.855, log 4.864, logratio:smoothed_gas 4.834 (RMSE 9.20 but
+  excl5 +0.29, erratic) -> no. v8 diff:y_lag24 4.682 vs v8 4.587 -> no.
+  Context: knn40k 4.719 (RMSE 9.23), mix40k 4.738 -> modest gain (~-0.15 vs typical v0).
+  New SQL data on v0: x1 outage split 4.812, x2 load/wind ens spread 4.800 (RMSE 9.49), x3 Maxar
+  weather 4.765 (excl5 -0.107, win 0.55, but RMSE 10.33), x4 op summary 4.864,
+  x5 all four 4.635 (RMSE 9.48) -> together ~-0.25 vs typical v0.
+  ISO load forecast dropped (stamped ~10:47 EPT > cutoff). PRT excluded (subscription ending).
+- Queued (est16, every3): e16_v8, e16_x6 (v8+all extra), e16_x6_knn40k, e16_x7 (v8+weather), e16_x5,
+  e16_v8_knn40k, e16_x6_ctx20k.
 
-## Ideas backlog
 ### Round 2 (2026-10-19), from tios-docs survey; priority order
 Model-side (queued 10-19): target transforms (asinh:20, log, logratio:smoothed_gas, v8 diff:y_lag24),
   context selection knn/mix from a 40k-row pool, 16 estimators (x2 seeds to measure seed noise).
