@@ -119,6 +119,97 @@ def cfg(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
 MF = ".meteologica.forecast."
 
 
+def extra(df: pd.DataFrame, name: str, key: str | None = None) -> pd.DataFrame:
+    """A table from research/pjm/collect_extra.R (fair D-1 vintages) on df's hourly
+    index, keyed columns spread wide as <col>__<key>. dt/hr are hour-ending EPT."""
+    r = pd.read_parquet(ROOT / "data" / "pjm_extra" / f"{name}.parquet")
+    r["ts"] = pd.to_datetime(r["dt"]) + pd.to_timedelta(r["hr"] - 1, unit="h")
+    r = r.drop(columns=["dt", "hr", "forecast_time"])
+    if key:
+        r[key] = r[key].astype(str).str.lower().str.replace(r"[^a-z0-9]+", "_", regex=True)
+        r = r.drop_duplicates(["ts", key]).pivot(index="ts", columns=key)
+        r.columns = [f"{c}__{k}" for c, k in r.columns]
+    else:
+        r = r.drop_duplicates("ts").set_index("ts")
+    return r.reindex(df.index)
+
+
+def add_outage_split(df: pd.DataFrame) -> pd.DataFrame:
+    """Planned/maintenance/forced outage MW (D-1 06:00 vintage, daily values)."""
+    x = extra(df, "outages", "region")
+    for c in ("planned_outages_mw", "maintenance_outages_mw", "forced_outages_mw",
+              "renewable_capacity_on_outage_mw"):
+        df[f"out_{c.removesuffix('_mw')}"] = x[f"{c}__all"]
+    df["out_forced_share"] = x["forced_outages_mw__all"] / x["capacity_on_outage_mw__all"]
+    df["out_forced_delta1d"] = df["out_forced_outages"] - lag(df["out_forced_outages"], 24)
+    df["out_forced_western"] = x["forced_outages_mw__western"]
+    df["out_forced_dominion"] = x["forced_outages_mw__mid_atlantic_dominion"]
+    return df
+
+
+def add_load_uncertainty(df: pd.DataFrame) -> pd.DataFrame:
+    """Meteologica ensemble spread and ensemble-vs-point load forecast disagreement."""
+    sl = extra(df, "scen_load", "region")
+    df["load_ens_std"] = sl["std_dev__all"]
+    df["load_ens_p95_p5"] = sl["quantile_95__all"] - sl["quantile_5__all"]
+    df["load_ens_upside"] = sl["quantile_95__all"] - sl["quantile_50__all"]
+    sw = extra(df, "scen_wind", "region")
+    df["wind_ens_std_ecmwf"] = sw["std_dev__ecmwf_ens"]
+    df["wind_ens_std_gefs"] = sw["std_dev__gefs"]
+    df["wind_ens_p5_ecmwf"] = sw["quantile_5__ecmwf_ens"]
+    df["wind_ecmwf_vs_gefs"] = sw["average__ecmwf_ens"] - sw["average__gefs"]
+    ss = extra(df, "scen_solar", "region")
+    df["solar_ens_std"] = ss["std_dev__ecmwf_ens"]
+    # pjm_load_forecast (ISO) is mostly stamped ~10:47 EPT, after the 10:30 cutoff,
+    # with no earlier vintage kept -> not used.
+    ml = extra(df, "met_load", "region")
+    df["load_met_band80"] = ml["upper_80__all"] - ml["lower_80__all"]
+    df["load_ens_mean_minus_point"] = sl["average__all"] - df["pjm_load"]
+    return df
+
+
+CITIES = {3: "cmh", 9: "dca", 10: "fwa", 11: "ewr", 13: "phl", 15: "bwi", 18: "orf",
+          20: "ric", 21: "crw", 27: "roa", 70: "akr", 74: "cle", 114: "iad",
+          162: "ord", 164: "pit"}
+
+
+def add_weather(df: pd.DataFrame) -> pd.DataFrame:
+    """Maxar city forecasts: cross-city aggregates, degree days, big-city temps, swings."""
+    x = extra(df, "maxar", "location_id")
+    temp = x[[f"temp__{i}" for i in CITIES]]
+    df["wx_temp_mean"] = temp.mean(axis=1)
+    df["wx_temp_min"] = temp.min(axis=1)
+    df["wx_temp_max"] = temp.max(axis=1)
+    df["wx_temp_spread"] = temp.std(axis=1)
+    df["wx_dew_mean"] = x[[f"dew_point__{i}" for i in CITIES]].mean(axis=1)
+    df["wx_wind_mean"] = x[[f"wind_speed__{i}" for i in CITIES]].mean(axis=1)
+    df["wx_wchl_min"] = x[[f"wchl__{i}" for i in CITIES]].min(axis=1)
+    df["wx_heat_index_max"] = x[[f"heat_index__{i}" for i in CITIES]].max(axis=1)
+    df["wx_hdd"] = (65 - df["wx_temp_mean"]).clip(lower=0)
+    df["wx_cdd"] = (df["wx_temp_mean"] - 65).clip(lower=0)
+    day = df.index.floor("D")
+    df["wx_day_temp_min"] = df["wx_temp_mean"].groupby(day).transform("min")
+    df["wx_day_temp_max"] = df["wx_temp_mean"].groupby(day).transform("max")
+    df["wx_temp_delta24"] = df["wx_temp_mean"] - lag(df["wx_temp_mean"], 24)
+    df["wx_feelslike_drop4h"] = df["feelslike_weightedavg"] - lag(df["feelslike_weightedavg"], 4)
+    for i in (162, 114, 164, 18, 13):  # ORD, IAD, PIT, ORF, PHL
+        df[f"wx_temp_{CITIES[i]}"] = x[f"temp__{i}"]
+    return df
+
+
+def add_op_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """PJM daily operating summary for D-1 (published the morning of D-1)."""
+    r = pd.read_parquet(ROOT / "data" / "pjm_extra" / "op_summary.parquet")
+    r = r.assign(day=pd.to_datetime(r["dt"]) + pd.Timedelta(days=1)).drop_duplicates("day")
+    r = r.set_index("day")
+    day = df.index.floor("D")
+    for c in ("operating_reserve_mw", "unscheduled_steam_capacity_mw",
+              "scheduled_tie_flow_total_mw", "load_forecast_mw"):
+        df[f"ops_d1_{c.removesuffix('_mw')}"] = r[c].reindex(day).to_numpy()
+    df["ops_d1_reserve_ratio"] = df["ops_d1_operating_reserve"] / df["ops_d1_load_forecast"]
+    return df
+
+
 def add_regional(df: pd.DataFrame) -> pd.DataFrame:
     regional = [f"load_{r}{MF}pjm" for r in ("southern", "western", "midatlantic")]
     regional += [f"wind_{r}{MF}pjm" for r in ("western", "midatlantic", "south")]
@@ -246,6 +337,11 @@ VARIANTS = {
     "c3_neighbors": [add_neighbors],
     "v8_v5_regional": [add_price_lags, add_fundamental_deltas, drop_redundant,
                        add_price_history, add_regional],
+    "x1_outage_split": [add_outage_split],
+    "x2_load_uncertainty": [add_load_uncertainty],
+    "x3_weather": [add_weather],
+    "x4_op_summary": [add_op_summary],
+    "x5_all_extra": [add_outage_split, add_load_uncertainty, add_weather, add_op_summary],
 }
 
 
@@ -259,7 +355,8 @@ def main() -> None:
     df = load(args.src)
     for fn in VARIANTS[args.variant]:
         df = fn(df)
-    df = df.replace([np.inf, -np.inf], np.nan).reset_index()
+    df = df.replace([np.inf, -np.inf], np.nan)
+    df = df.drop(columns=df.columns[df.isna().all()]).reset_index()
 
     out = args.out / args.variant
     out.mkdir(parents=True, exist_ok=True)
