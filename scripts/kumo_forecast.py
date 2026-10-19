@@ -91,6 +91,62 @@ def predict(model, context, query, target, args, device) -> pd.DataFrame:
     return pd.concat(outs, ignore_index=True)
 
 
+def target_transform(spec: str):
+    """(forward(y, df), inverse(q, df)) for --target-transform; all are monotone
+    in y, so inverse-transforming each predicted quantile is exact."""
+    kind, _, col = spec.partition(":")
+    if kind == "none":
+        return (lambda y, df: y), (lambda q, df: q)
+    if kind == "asinh":  # compresses price spikes; ~linear below the scale
+        scale = float(col or 20.0)
+        return (lambda y, df: np.arcsinh(y / scale)), (lambda q, df: np.sinh(q) * scale)
+    if kind == "log":
+        return (lambda y, df: np.log(y)), (lambda q, df: np.exp(q))
+    if kind == "ratio":  # e.g. ratio:smoothed_gas -> implied heat rate
+        return (lambda y, df: y / df[col]), (lambda q, df: q * df[col])
+    if kind == "logratio":
+        return (lambda y, df: np.log(y / df[col])), (lambda q, df: np.exp(q) * df[col])
+    if kind == "diff":  # e.g. diff:y_lag24 -> predict the change
+        return (lambda y, df: y - df[col]), (lambda q, df: q + df[col])
+    raise ValueError(f"unknown --target-transform {spec!r}")
+
+
+def select_context(history, query, args) -> pd.DataFrame:
+    """--context-select: 'recent' = last --max-context rows; 'knn' = for each
+    query row its nearest history rows (standardized features), unioned and
+    topped up with the most recent rows; 'mix' = half recent, half knn."""
+    history = history.tail(args.context_pool)
+    n = args.max_context
+    if args.context_select == "recent" or len(history) <= n:
+        return history.tail(n)
+    n_knn = n if args.context_select == "knn" else n // 2
+    cols = [c for c in query.columns
+            if c not in (args.target, args.time_col) and pd.api.types.is_numeric_dtype(query[c])
+            and pd.api.types.is_numeric_dtype(history[c])]
+    h = history[cols].to_numpy(float)
+    mu, sd = np.nanmean(h, 0), np.nanstd(h, 0) + 1e-9
+    h = np.nan_to_num((h - mu) / sd)
+    q = np.nan_to_num((query[cols].to_numpy(float) - mu) / sd)
+    d = ((q**2).sum(1)[:, None] - 2 * q @ h.T + (h**2).sum(1)[None, :])  # [Q, H]
+    # Round-robin over query rows by rank until n_knn unique rows are picked.
+    order = np.argsort(d, axis=1)
+    picked, seen = [], np.zeros(len(history), bool)
+    for rank in range(order.shape[1]):
+        for i in order[:, rank]:
+            if not seen[i]:
+                seen[i] = True
+                picked.append(i)
+        if len(picked) >= n_knn:
+            break
+    seen[:] = False
+    seen[picked[:n_knn]] = True
+    for i in range(len(history) - 1, -1, -1):  # top up with the most recent
+        if seen.sum() >= n:
+            break
+        seen[i] = True
+    return history[seen]
+
+
 def metrics(
     y: np.ndarray, quantiles: pd.DataFrame, mean: np.ndarray | None = None
 ) -> dict[str, float]:
@@ -166,6 +222,14 @@ def main() -> None:
         help="Only forecast every Nth step (context still gets every step's "
         "actuals), i.e. an unbiased 1/N sample of the daily walk-forward",
     )
+    p.add_argument(
+        "--target-transform",
+        default="none",
+        help="none | asinh[:scale] | log | ratio:COL | logratio:COL | diff:COL",
+    )
+    p.add_argument("--context-select", default="recent", choices=["recent", "knn", "mix"])
+    p.add_argument("--context-pool", type=int, default=10_000,
+                   help="History rows that 'knn'/'mix' may select from")
     p.add_argument("--smoke", action="store_true", help="Run on toy data")
     args = p.parse_args()
 
@@ -194,18 +258,22 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = sdm.models.KumoTabular(task="regression", size=args.size, device=device)
 
+    fwd, inv = target_transform(args.target_transform)
+
     def forecast(context: pd.DataFrame, query: pd.DataFrame) -> pd.DataFrame:
-        return predict(
+        context = select_context(context.dropna(subset=[args.target]), query, args).copy()
+        context[args.target] = fwd(context[args.target], context)
+        context = context.replace([np.inf, -np.inf], np.nan).dropna(subset=[args.target])
+        q = predict(
             model,
-            prepare(
-                context.dropna(subset=[args.target]).tail(args.max_context),
-                args.time_col,
-            ),
+            prepare(context, args.time_col),
             prepare(query, args.time_col),
             args.target,
             args,
             device,
         )
+        q = q.apply(lambda c: inv(c.to_numpy(), query.reset_index(drop=True)))
+        return q
 
     if args.walk_forward:
         mode = "walk_forward"
@@ -224,7 +292,7 @@ def main() -> None:
                 scored.append(rows.index)
                 last = rows[args.time_col].iloc[-1]
                 print(f"walk-forward: {i}/{len(steps)} steps (through {last:%Y-%m-%d})")
-            context = pd.concat([context, rows]).tail(args.max_context)
+            context = pd.concat([context, rows]).tail(max(args.max_context, args.context_pool))
         quantiles = pd.concat(parts, ignore_index=True)
         val = val.loc[np.concatenate(scored)].reset_index(drop=True)
     else:
