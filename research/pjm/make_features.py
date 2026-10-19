@@ -289,6 +289,34 @@ def add_ice(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def ice_asof(days: pd.DatetimeIndex, instrument_id: int = 9) -> pd.Series:
+    """West Hub ICE next-day on-peak price for each day D, from the contract for D
+    traded before the D-1 10:30 EPT cutoff (research/pjm/collect_ice.R keeps Monday
+    contracts traded on Friday, which ice_price_computor drops). NaN on days with
+    no contract (weekends/holidays); Kumo handles missing values."""
+    r = pd.read_parquet(ROOT / "data" / "pjm_extra" / "ice.parquet")
+    r = r[r["instrument_id"] == instrument_id].assign(
+        start=lambda x: pd.to_datetime(x["start_dt"]), traded=lambda x: pd.to_datetime(x["trade_time"]))
+    r = r[r["traded"] < r["start"] - pd.Timedelta(days=1) + pd.Timedelta(hours=10, minutes=30)]
+    return r.drop_duplicates("start").set_index("start")["ice_price"].reindex(days)
+
+
+def add_ice_asof(df: pd.DataFrame) -> pd.DataFrame:
+    """ICE next-day price (Mon-Fri), with West Hub congestion kept as separate features
+    (forecast for D and D-1 DA actual) rather than only the 50/50 energy adjustment."""
+    day = df.index.floor("D")
+    df["ice_asof_price"] = ice_asof(pd.DatetimeIndex(day.unique())).reindex(day).to_numpy()
+    x = raw(df, ["west_congestion_fc", "west_da_congestion"])
+    df["west_congestion_fc"] = x["west_congestion_fc"]
+    df["west_da_congestion_lag24"] = lag(x["west_da_congestion"], 24)
+    df["west_cong_fc_onpeak"] = onpeak_daily_mean(x["west_congestion_fc"])
+    df["west_da_cong_d1_onpeak"] = onpeak_daily_mean(df["west_da_congestion_lag24"])
+    df["ice_energy_anchor"] = df["ice_asof_price"] - (
+        df["west_cong_fc_onpeak"] + df["west_da_cong_d1_onpeak"]) / 2
+    df["is_onpeak"] = ((df.index.hour >= 7) & (df.index.hour <= 22)).astype(float)
+    return df
+
+
 def add_rt(df: pd.DataFrame) -> pd.DataFrame:
     """RT price history known before the D-1 deadline (lags >= 48h, D-2 and earlier)."""
     x = raw(df, ["rt_energy_price", "da_energy_price", "is_spike"])
@@ -371,6 +399,10 @@ VARIANTS = {
                            add_price_history, add_regional, add_weather_lean],
     "x9_v8_lean_extra": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history,
                          add_regional, add_weather_lean, add_extra_lean],
+    "i1_x9_ice": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history,
+                  add_regional, add_weather_lean, add_extra_lean, add_ice_asof],
+    "i2_v8_ice": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history,
+                  add_regional, add_ice_asof],
     "x7_v8_weather": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history,
                       add_regional, add_weather],
 }
