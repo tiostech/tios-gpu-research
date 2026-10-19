@@ -197,6 +197,28 @@ def add_weather(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+WX_LEAN = ["wx_temp_mean", "wx_temp_spread", "wx_dew_mean", "wx_wind_mean", "wx_hdd", "wx_cdd",
+           "wx_day_temp_min", "wx_day_temp_max", "wx_temp_delta24", "wx_feelslike_drop4h"]
+
+
+def add_weather_lean(df: pd.DataFrame) -> pd.DataFrame:
+    """Cross-city weather aggregates only (no per-city temps / extremes)."""
+    cols = set(df.columns)
+    df = add_weather(df)
+    return df.drop(columns=[c for c in df.columns if c not in cols and c not in WX_LEAN])
+
+
+def add_extra_lean(df: pd.DataFrame) -> pd.DataFrame:
+    """Lean picks from the round-2 pulls: forced outages and load-ensemble spread."""
+    x = extra(df, "outages", "region")
+    df["out_forced_outages"] = x["forced_outages_mw__all"]
+    df["out_forced_share"] = x["forced_outages_mw__all"] / x["capacity_on_outage_mw__all"]
+    sl = extra(df, "scen_load", "region")
+    df["load_ens_std"] = sl["std_dev__all"]
+    df["load_ens_upside"] = sl["quantile_95__all"] - sl["quantile_50__all"]
+    return df
+
+
 def add_op_summary(df: pd.DataFrame) -> pd.DataFrame:
     """PJM daily operating summary for D-1 (published the morning of D-1)."""
     r = pd.read_parquet(ROOT / "data" / "pjm_extra" / "op_summary.parquet")
@@ -345,6 +367,10 @@ VARIANTS = {
     "x6_v8_all_extra": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history,
                         add_regional, add_outage_split, add_load_uncertainty, add_weather,
                         add_op_summary],
+    "x8_v8_weather_lean": [add_price_lags, add_fundamental_deltas, drop_redundant,
+                           add_price_history, add_regional, add_weather_lean],
+    "x9_v8_lean_extra": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history,
+                         add_regional, add_weather_lean, add_extra_lean],
     "x7_v8_weather": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history,
                       add_regional, add_weather],
 }
