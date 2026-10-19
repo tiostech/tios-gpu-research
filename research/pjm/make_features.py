@@ -342,6 +342,11 @@ VARIANTS = {
     "x3_weather": [add_weather],
     "x4_op_summary": [add_op_summary],
     "x5_all_extra": [add_outage_split, add_load_uncertainty, add_weather, add_op_summary],
+    "x6_v8_all_extra": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history,
+                        add_regional, add_outage_split, add_load_uncertainty, add_weather,
+                        add_op_summary],
+    "x7_v8_weather": [add_price_lags, add_fundamental_deltas, drop_redundant, add_price_history,
+                      add_regional, add_weather],
 }
 
 
