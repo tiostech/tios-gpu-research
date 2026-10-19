@@ -108,6 +108,28 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
   price: Tue-Fri only (55% of 2025 hours), corr 0.966 with DA on-peak mean -> strong anchor.
 
 ## Ideas backlog
+### Round 2 (2026-10-19), from tios-docs survey; priority order
+Model-side (queued 10-19): target transforms (asinh:20, log, logratio:smoothed_gas, v8 diff:y_lag24),
+  context selection knn/mix from a 40k-row pool, 16 estimators (x2 seeds to measure seed noise).
+1. Gen outage split: pjm_totalgen_on_outages (planned/maintenance/forced MW, forecast_time) +
+   pjm_iir_aggregated_outage_forecasts other fuel keys (filter is_unfair).
+2. Weather detail: pjm_maxar_weather_forecasts raw temp/dewpoint/wind by city (pjm_locations),
+   cross-city spread, 4h feels-like drop, HDD/CDD; Meteologica scenario load/wind/solar std_dev
+   (forecast uncertainty). Check vintage semantics (data_sources.type) before use.
+3. Load forecast disagreement: Meteologica vs ISO (pjm_load_forecast, forecast_time vintages) and
+   revisions; pjm_op_summaries (peak load fc, operating reserve, unscheduled steam).
+4. Vendor price forecast: pjm_prt_lmp_forecasts West Hub DA (as-of via *_forecast_time) as a feature.
+5. ICE strips available every day (nextweek 66 / balweek 67) to cover non-ICE days (Sat-Mon).
+6. Congestion/constraints: pjm_hourly_congestion_forecasts for other hubs/zones; high-kV transmission
+   outage counts as-of from pjm_transmission_outages_versions.
+7. Cross-market: MISO Indy Hub DA lags (fair), miso_operating_margin_forecasts, MISO weighted feels-like.
+8. "Joint" MISO: Kumo-Tabular is single-target (supports_multi_target=False). Options: stack the
+   production MISO flex.daep forecast (fair at ~09:05 CT < PJM 09:30 CT cutoff) but live history only
+   from 2025-11 -> needs run_forecast_backtest for 2017-2025; or a Kumo stage-1 MISO forecast made
+   walk-forward OOS over all history (expensive); or row-stack PJM+MISO rows with a market flag.
+Timing: PJM cutoff 09:30 CT (deadline 10:00 CT); MISO data in fixed EST; forecast_time is market-local.
+
+### Round 1
 - y lags 24/48/168, same-hour-yesterday, daily mean/max of D-1, rolling 7d mean
 - lagged heat rate (y / smoothed_gas) lag 24/168
 - RT lags 48h+, D-2 RT-DA spread, spike counts
