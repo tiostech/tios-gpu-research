@@ -230,6 +230,9 @@ def main() -> None:
     p.add_argument("--context-select", default="recent", choices=["recent", "knn", "mix"])
     p.add_argument("--context-pool", type=int, default=10_000,
                    help="History rows that 'knn'/'mix' may select from")
+    p.add_argument("--feature-frac", type=float, default=1.0,
+                   help="Random-subspace member: keep this fraction of feature columns")
+    p.add_argument("--feature-seed", type=int, default=0, help="RNG seed for --feature-frac")
     p.add_argument("--smoke", action="store_true", help="Run on toy data")
     args = p.parse_args()
 
@@ -253,6 +256,15 @@ def main() -> None:
             df = df.sort_values(args.time_col)
         splits[name] = df.reset_index(drop=True)
     train, val = splits["train"], splits["val"]
+    if args.feature_frac < 1:
+        # Same column subset for the whole run; the time column (calendar features) is always kept.
+        cols = [c for c in train.columns if c not in (args.target, args.time_col)]
+        rng = np.random.default_rng(args.feature_seed)
+        keep = set(rng.choice(cols, size=max(1, round(len(cols) * args.feature_frac)), replace=False))
+        dropped = [c for c in cols if c not in keep]
+        train, val = train.drop(columns=dropped), val.drop(columns=dropped)
+        print(f"feature-frac {args.feature_frac} seed {args.feature_seed}: "
+              f"kept {len(keep)}/{len(cols)} features")
 
     torch.manual_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
