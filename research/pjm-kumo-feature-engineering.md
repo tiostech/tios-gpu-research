@@ -55,6 +55,27 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
 | Kumo walk-forward, original features | 4.67 | 9.49 | 9.75 | user GPU run 2026-10-16 |
 | Timestral-209M + covariates, 32k ctx | 4.88 | - | 10.18 | user GPU run |
 
+## Current best (full daily 2025 walk-forward; HOLD = 243 days never used for selection)
+| model | MAE all | RMSE all | MAE HOLD | RMSE HOLD |
+|---|---|---|---|---|
+| original Kumo baseline (v0, est8, seed 0) | 4.672 | 9.49 | 4.608 | 9.35 |
+| e16_x9 single (v8 + lean weather + forced outages + load-ens spread) | 4.462 | 9.13 | 4.442 | 9.06 |
+| ens3 = mean(v0_ctx20k, c1_ctx20k, v8) | 4.459 | 8.86 | 4.452 | 8.93 |
+| ensB = mean(v0_ctx20k, c1_ctx20k, e16_x9) | 4.421 | 8.82 | 4.404 | 8.81 |
+| ensC = ensB + e16_v8_knn40k | 4.391 | 8.86 | 4.371 | 8.93 |
+
+## Methodology / consistency (checked 2026-10-20)
+- Every run uses the same daily walk-forward as the original baseline: forecast day D from context
+  before D, append D's actuals, step to D+1 (scripts/kumo_forecast.py --walk-forward).
+- `--eval-every 3` runs are the same daily walk-forward but only *forecast* every 3rd day; their
+  forecasts are bit-identical to a full daily run on those days. Verified: v0 rerun on current code
+  (v0_repro_check) == the user's original daily baseline on all 2928 scored hours (max |diff| 0.0).
+- Screen numbers (every-3rd day, baseline 4.799) and full-year numbers (baseline 4.672) are on
+  different day sets: only compare within a section. Final claims use full daily runs + HOLD days.
+- Settings that vary by run (estimators 8/16, context 10k/20k, recent/knn) are in the run name
+  and val_*_metrics.json args. The original baseline (est8 seed 0) is ~0.08 MAE luckier than a
+  typical seed. 7-day-step runs (first day only) were biased and abandoned.
+
 ## Experiment log
 (newest last; one line per run: variant, features changed, metrics, takeaway)
 - 2026-10-17 v0 @ step 7d: MAE 5.82, RMSE(med) 12.17 -> showed 7d screening is biased; abandoned.
@@ -154,6 +175,19 @@ but the single-model path took ~40 runs while ensembling got it for free, and ev
 6. Why ensembling works: members built on different feature sets / contexts retrieve different analogs,
    so their errors on spike days are only weakly correlated; averaging quantiles cancels member-specific
    misses (bagging-like variance reduction over the ICL estimator), which no single feature set does.
+Drivers summary (what kind of change moved results):
+| type of change | effect | examples |
+|---|---|---|
+| features giving locational / regime analogs | helps typical days | c1 regional, weather aggregates (x8) |
+| relative-change features (deltas vs yesterday) | helps spike days / RMSE | v2-v5 fundamental deltas, v8 |
+| more columns restating existing info | neutral, dilutes spikes | ICE, op summary, full weather, outage split alone |
+| raw cross-market magnitudes | hurts | c3 neighbors (MISO/SPP/NYISO/ISONE raw) |
+| price lags alone | hurts slightly | v1 (context already carries recent prices) |
+| target transforms | neutral alone; mild ensemble diversity at best | asinh, log, logratio gas |
+| context size / kNN | helps weak feature sets, noisy; diversity in ensembles | ctx20k, knn40k |
+| estimators 8 -> 16 | lower seed noise, no accuracy gain | e_est16 |
+| ensembling diverse members | most reliable gain | ens3, ensB, ensC |
+
 Lesson for future screens: use est16, a 2-seed baseline, report excl5 + win rate, and treat < ~0.15
 MAE as noise unless it survives a full daily holdout.
 
