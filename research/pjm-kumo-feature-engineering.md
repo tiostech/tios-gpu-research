@@ -8,7 +8,9 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
   `--walk-forward` (daily), target `y`, time col `ts` (hour-beginning, EPT wall clock).
 - Splits: train 2017-12-31 .. 2024-12-31, val 2025 (8760 h, 1 missing target on DST).
 - Instance: `ssh tiostech@10.0.92.46` (A10G 24GB), repo at /ebsmount/www/tios-gpu-research.
-  Full daily walk-forward of baseline took ~35 min.
+  Full daily walk-forward of baseline took ~35 min. GPU is compute-saturated during runs
+  (100% util, ~257/300 W, fp16 autocast already on; CPU/disk idle) -> runtime scales with
+  context rows x estimators x features; only a bigger GPU or fewer est/rows speeds it up.
 - Metrics: script prints `mae_median` (MAE of q500) and `rmse_mean`; the R comparison
   in tios-quant-shiny uses RMSE of q500 as well. Report both MAE(q500), RMSE(q500), RMSE(mean).
 
@@ -214,6 +216,36 @@ RESULTS (2026-10-20, full daily 2025; HOLD = 243 days never used for selection; 
   Walk-forward inverse-MAE weighting (trailing 30/60 days, p=1/2): 4.386-4.389 -> no gain over equal.
   Takeaway: better members (x9) and context diversity (knn) add ~0.05-0.08 over ens3; weighting,
   medians and more members do not. Predictions: box /scratch/outputs/pjm-fe/ens{B,C}_daily.
+
+## Self-correction layer (2026-10-20) -- fail-fast verdict: NO GAIN
+Design: base = x9 (est8, ctx10k, seed 0; best accuracy/compute) walk-forward daily over 2024-2025
+  (`resplit.py x9_v8_lean_extra x9_wf2y`, run base_x9_wf2y, ~85 min; 2-yr MAE 3.636 / RMSE 7.53).
+  Correction = Kumo-Tabular (same settings) on target r = y - base_q500, context = 2024 out-of-sample
+  residuals, walk-forward daily over 2025 (appends realised residuals). 38 features
+  (`make_correction.py`): base state (q500, 80% band, IQR, skew, mean-median, q500 vs y_lag24 / 7-day),
+  lagged residuals (r lag24/48, same-hour 7d, D-1 mean/absmean/max/min, D-2, 7-day), and 24h/168h
+  changes in load, wind, solar, outages, cushion, gas %, temps, MISO stress, load-ensemble std.
+  Corrected = base_q500 + lam * r_q500; lam picked on screen days (`eval_correction.py`). Run ~33 min.
+Results 2025 (base x9 est8 HOLD 4.442 / 9.13, same as e16_x9):
+| | ALL MAE / RMSE | SCREEN | HOLD |
+|---|---|---|---|
+| base | 4.470 / 9.25 | 4.526 / 9.48 | 4.442 / 9.13 |
+| lam=1 | 4.519 / 9.18 | 4.525 / 9.04 | 4.515 / 9.25 |
+| lam=0.5 (chosen) | 4.445 / 9.12 | 4.488 / 9.17 | 4.424 / 9.09 |
+  HOLD daily gain lam=0.5: +0.018 +- 0.030 (win .51) -> noise; lam=1: -0.073 +- 0.062 (win .45) -> hurts.
+Why it fails (consistent with the pre-run diagnostics):
+- Base residuals are nearly white: corr(r, r_lag24) -0.09, day-mean lag-1 -0.07, 2025 mean bias +0.13.
+  The walk-forward base already conditions on yesterday's prices, so there is no persistent error to learn.
+- Predicted corrections are small and mostly negative (median -0.2, sd 2.6 vs residual sd 9.25; corr with
+  the realised residual 0.18). The only learnable signal is "wide base band -> actual lands below
+  median" (spike-shaped upper tail); the layer shrinks forecasts on those hours, which helps a few
+  spike-prone screen days (screen RMSE -0.45) but not the holdout.
+- One year (8.8k rows) of residual context with ~3 spike days gives the ICL model too few analogs for
+  the error regimes that matter; the correction for typical hours is ~0.
+- Contrast with markets where this worked: there the base was presumably a static (non-walk-forward)
+  model with drift / regime bias. Kumo walk-forward is itself an online, in-context learner, so the
+  'learn from recent errors' role is already played by the appended context.
+Not pursued further. A correction on an *ensemble* (ensC) base would face the same white residuals.
 
 ### Round 2 (2026-10-19), from tios-docs survey; priority order
 Model-side (queued 10-19): target transforms (asinh:20, log, logratio:smoothed_gas, v8 diff:y_lag24),
