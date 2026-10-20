@@ -287,6 +287,32 @@ Verdict: no gain from the production blend. The breakdown says the remaining err
   tight-cushion hours on ~10-30 days -> next work should target those (day-level model with full-history
   context; stress-enriched context selection), not more columns.
 
+## Day-level model (#2) and analog context (#3) (2026-10-20) -- verdict: NO SIGNIFICANT GAIN
+#2 Day-level models (`make_daily.py`; one row per day, 89 features = daily means of x9 + min/max/peak-mean
+  of stress drivers; context = all 2018-2024 days; est16, daily walk-forward 2025; `eval_daylevel.py`):
+  d1_x9_mean (target = day mean): HOLD-day MAE of the day level 3.382 vs ensC's implied level 3.341
+    (50/50 3.242; error corr 0.87). Worst-30-day level MAE 12.9 vs ensC 14.1 (better Jan 18/21, Jun 24-25;
+    worse Jul 29: 105 vs actual 164, ensC 127).
+  d2_x9_peak (target = mean of HB 16-20): 7.071 vs ensC-implied 6.729 (50/50 6.659).
+  Re-levelling ensC hourly q500 toward the day models (lam on SCREEN; A = all hours by day-mean gap,
+    B = HB16-20 by peak gap, C = B + off-peak hours so the day mean matches A):
+    ensC C lam=0.4: HOLD 4.326 / 9.08 (+0.045 +- 0.059 vs 4.371 / 8.93, win .59); A lam=0.3: 4.336 / 8.94.
+    x9 C lam=0.4: 4.365 / 9.13 (+0.077 +- 0.060 vs 4.442 / 9.06). lam=1 loses ~0.22 in every scheme.
+  -> Full-history context does not make the day level more accurate on its own; it is a mildly
+     diversifying level signal (corr .87), worth ~+0.05 MAE at the cost of RMSE, inside noise.
+#3 Analog context (`--context-select analog`: recent (1-f)*10k rows + f*10k older rows nearest to the
+  query day on supply_cushion_ratio, thermal_stress_all_pjm, net_load, feelslike, smoothed_gas + hour;
+  pool = all history from 2018; x9, est16, every3; vs e16_x9 4.500 / 9.26):
+  a1 f=0.3: 4.636 / 9.85 (-0.136 +- 0.097); top-10 spike days 16.71 vs 15.87; other days 3.558 vs 3.485.
+  a2 f=0.5: 4.530 / 9.17 (-0.030 +- 0.093); top-10 spike days 16.34 vs 15.87; other days 3.476 vs 3.485.
+  Error corr with x9 0.97-0.98. In ensC: + a2 4.410 / 8.71 (+0.019 +- 0.026); x9 -> a2 4.425 / 8.67 (+0.004).
+  -> Giving the model older stressed analogs does not fix spike days (slightly worse): older analogs
+     (e.g. 2022 high-gas winter for Jan 22 2025) come from a different price regime (gas level, capacity
+     mix), so their prices mislead as much as they inform. kNN-type selection again acts only as weak
+     ensemble diversity.
+Overall reading: the spike-day turning points are not recoverable from day-ahead fundamentals with more
+  or better-chosen history. Both remaining levers (#2 re-level, #3 analog member) are within noise.
+
 ### Round 2 (2026-10-19), from tios-docs survey; priority order
 Model-side (queued 10-19): target transforms (asinh:20, log, logratio:smoothed_gas, v8 diff:y_lag24),
   context selection knn/mix from a 40k-row pool, 16 estimators (x2 seeds to measure seed noise).
