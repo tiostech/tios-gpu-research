@@ -117,6 +117,8 @@ def select_context(history, query, args) -> pd.DataFrame:
     topped up with the most recent rows; 'mix' = half recent, half knn."""
     history = history.tail(args.context_pool)
     n = args.max_context
+    if args.context_select == "analog" and len(history) > n:
+        return select_analogs(history, query, args)
     if args.context_select == "recent" or len(history) <= n:
         return history.tail(n)
     n_knn = n if args.context_select == "knn" else n // 2
@@ -145,6 +147,36 @@ def select_context(history, query, args) -> pd.DataFrame:
             break
         seen[i] = True
     return history[seen]
+
+
+def select_analogs(history, query, args) -> pd.DataFrame:
+    """--context-select analog: the most recent (1 - --analog-frac) * --max-context rows, plus
+    the older pool rows nearest to the query day on a few key drivers (--analog-cols,
+    standardized, plus hour of day), so stressed query days see stressed past days."""
+    n = args.max_context
+    n_recent = int(round(n * (1 - args.analog_frac)))
+    recent, older = history.iloc[len(history) - n_recent:], history.iloc[: len(history) - n_recent]
+
+    def keys(df):
+        k = df[args.analog_cols].to_numpy(float)
+        hour = df[args.time_col].dt.hour.to_numpy() * (2 * np.pi / 24)
+        return np.column_stack([k, np.sin(hour), np.cos(hour)])
+
+    h, q = keys(older), keys(query)
+    mu, sd = np.nanmean(h, 0), np.nanstd(h, 0) + 1e-9
+    h, q = np.nan_to_num((h - mu) / sd), np.nan_to_num((q - mu) / sd)
+    order = np.argsort((q**2).sum(1)[:, None] - 2 * q @ h.T + (h**2).sum(1)[None, :], axis=1)
+    picked, seen = [], np.zeros(len(older), bool)
+    for rank in range(order.shape[1]):  # round-robin over query hours
+        for i in order[:, rank]:
+            if not seen[i]:
+                seen[i] = True
+                picked.append(i)
+        if len(picked) >= n - n_recent:
+            break
+    seen[:] = False
+    seen[picked[: n - n_recent]] = True
+    return pd.concat([older[seen], recent])
 
 
 def metrics(
@@ -227,7 +259,13 @@ def main() -> None:
         default="none",
         help="none | asinh[:scale] | log | ratio:COL | logratio:COL | diff:COL",
     )
-    p.add_argument("--context-select", default="recent", choices=["recent", "knn", "mix"])
+    p.add_argument("--context-select", default="recent", choices=["recent", "knn", "mix", "analog"])
+    p.add_argument("--analog-frac", type=float, default=0.3,
+                   help="'analog': share of context taken from older nearest-driver rows")
+    p.add_argument("--analog-cols", nargs="+",
+                   default=["supply_cushion_ratio", "thermal_stress_all_pjm", "net_load",
+                            "feelslike_weightedavg", "smoothed_gas"],
+                   help="'analog': key drivers used for the nearest-row search")
     p.add_argument("--context-pool", type=int, default=10_000,
                    help="History rows that 'knn'/'mix' may select from")
     p.add_argument("--feature-frac", type=float, default=1.0,
