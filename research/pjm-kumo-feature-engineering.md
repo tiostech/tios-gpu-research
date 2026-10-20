@@ -264,6 +264,29 @@ Why: x9's 65 columns are already a curated set in which a handful (price history
   bias, not diversity. Useful diversity here comes from *different information or context* (c1 regional,
   ctx20k, kNN), not random column removal. A milder frac (0.8-0.9) would at best approach x9.
 
+## Error breakdown + production-forecast blend (2026-10-20) -- `research/pjm/analyze_blend.py`
+Production DAFC: `pjm_tios_forecasts` name 'flex.daep.20261001' (point forecast only, no bands populated;
+  2025-01-01 onward, stamped 10:30-10:35 D-1; user confirms it is published fairly) ->
+  data/pjm_extra/prod_flex_daep.parquet. No pre-2025 history, so it cannot be a Kumo feature (no context).
+Where ensC's 2025 error lives (MAE of q500):
+  season: DJF 5.04, JJA 4.74, SON 4.22, MAM 3.58 (prod 6.47 / 5.79 / 4.72 / 4.74).
+  hour block (HB): 16-20 = 7.66 MAE and 36% of all abs error in 21% of hours; 00-05 2.49; 06-09 4.45.
+  supply-cushion ratio: tightest 10% of hours = 13.0 MAE, 30% of abs error; loosest 10% = 1.4.
+  concentration: top 3 days = 6% of abs error / 26% of SSE; top 10 = 16% / 54%; top 30 = 29% / 69%.
+  top days come in episodes (Jan 18-22 cold snap, Jun 24-25, Jul 28-30 heat): under-forecast on the
+  first spike day(s), over-forecast after the peak passes (Jan 21-22, Jun 25, Jul 30) -> anchored on
+  recent prices. On average the effect is small (bias after a >8 under-forecast day: -2.4, n=11;
+  corr(bias, D-1 price jump) -0.05), so it is an episode-level, not a systematic, error.
+  Overall bias ~0 (+0.05); spike misses split 53/47 under/over.
+Production forecast vs Kumo (HOLD 243 days): prod 5.380 / 11.44 (ALL 5.426 / 11.68) -- worse than the
+  original Kumo baseline (4.608 / 9.35) in every season and hour block. Error corr with ensC 0.82.
+  Blend w*prod + (1-w)*kumo, w picked on SCREEN: w=0 for ensC/ensB/ens3; x9 w=0.05 (+0.014 +- 0.009);
+  50/50 blends lose 0.11-0.24. Prod beat ensC on a few spike days (Jan 22 19.7 vs 29.5, Jun 25 8.3 vs
+  17.5) but was far worse on others (Jan 20 67 vs 23, Jun 24 43 vs 24) -> no usable diversity.
+Verdict: no gain from the production blend. The breakdown says the remaining error is evening-peak,
+  tight-cushion hours on ~10-30 days -> next work should target those (day-level model with full-history
+  context; stress-enriched context selection), not more columns.
+
 ### Round 2 (2026-10-19), from tios-docs survey; priority order
 Model-side (queued 10-19): target transforms (asinh:20, log, logratio:smoothed_gas, v8 diff:y_lag24),
   context selection knn/mix from a 40k-row pool, 16 estimators (x2 seeds to measure seed noise).
