@@ -117,8 +117,56 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
   weather 4.765 (excl5 -0.107, win 0.55, but RMSE 10.33), x4 op summary 4.864,
   x5 all four 4.635 (RMSE 9.48) -> together ~-0.25 vs typical v0.
   ISO load forecast dropped (stamped ~10:47 EPT > cutoff). PRT excluded (subscription ending).
-- Queued (est16, every3): e16_v8, e16_x6 (v8+all extra), e16_x6_knn40k, e16_x7 (v8+weather), e16_x5,
-  e16_v8_knn40k, e16_x6_ctx20k.
+- Round 3 (est16, every3; dMAE vs typical v0 = mean of 2 est16 seeds, MAE 4.879, RMSE ~10.1;
+  excl5 = dMAE without the 5 worst baseline days):
+  e16_v8 4.573 (-0.31+-0.15, excl5 -0.10, RMSE 8.92) | e16_x7 v8+weather 4.520 (-0.36, -0.18, 9.47)
+  e16_x8 v8+lean weather 4.534 (-0.35, -0.18, 9.28, win .56) | e16_x9 x8+forced out+load ens 4.500
+  (-0.38+-0.18, -0.20, 9.26, win .57) = BEST SINGLE | e16_x6 v8+all extra 4.557 (-0.32, -0.21, 10.21)
+  e16_x5 v0+all extra 4.609 | e16_x6_knn40k 4.699 (10.37) | e16_v8_knn40k 4.592 (8.95) | e16_x6_ctx20k 4.561
+  ICE (all Mon-Fri incl. Monday contracts traded Fri, NULL weekends; + west congestion fc and D-1 DA
+  congestion as separate features): e16_i2 v8+ICE 4.616 (RMSE 9.53), e16_i1 x9+ICE 4.547 (9.66) -> no.
+  Spike days dominate: 2025-01-22, 06-24, 07-30 decide most RMSE differences (x6 doubled 07-30 error).
+- e16_x7_daily (full 2025, est16): MAE 4.481 / RMSE 9.19 (orig baseline 4.672 / 9.49); holdout 243 days
+  4.461 vs 4.608, RMSE 9.05 vs 9.35, win .54. ens3 holdout 4.452 / 8.93 / win .62 for comparison.
+
+## Synthesis (2026-10-19): what moved the needle and why (thesis)
+Bottom line: relative to a *typical* baseline run (~4.88 on screen days; the original seed-0 run was
+~0.08 lucky), the best single model (x9/x7) gains ~0.35 MAE / ~7%, about what the first 3-way ensemble got;
+but the single-model path took ~40 runs while ensembling got it for free, and every variant sits within
+~0.1-0.2 MAE of the others -- inside 1-2 bootstrap SE once spike days are included.
+1. Kumo already has the main information. pjm_load / gas / thermal stress / outages / feels-like are
+   themselves forecasts that embed weather and system state; new sources (city temps, outage split,
+   ensemble spread, ICE) are largely re-expressions of it. ICE in particular trades minutes before our
+   cutoff on the same fundamentals the model sees, and adds nothing over price history + fundamentals.
+2. In-context learning predicts by analogy to context rows. Gains come from features that make the
+   right rows look similar (regional load/wind/solar -> locational analogs; fundamental deltas ->
+   'tightening vs loosening' days), not from features with marginal correlation to price.
+3. Column dilution. Columns are attended to roughly symmetrically and the readout has a fixed width, so
+   every extra column weakens the few that matter on spike days. Hence the recurring pattern: more
+   features -> better typical days, worse spikes (x6, i1, c3 neighbors, x7 vs x8).
+4. Spike days are not forecastable from day-ahead fundamentals alone (scarcity bidding, unit trips,
+   gas-pipeline constraints in real time); with only a handful of analogs in 10k-20k context the median
+   shrinks toward normal. These ~3 days drive most of RMSE and most of the noise in every comparison.
+5. Model-side knobs: target transforms change little because Kumo standardizes the target and the
+   median is roughly transform-equivariant; kNN context helps a weak feature set (v0) but not v8, whose
+   price-history features already supply the analog information; more estimators reduce seed variance
+   (0.10 -> 0.02) but not bias.
+6. Why ensembling works: members built on different feature sets / contexts retrieve different analogs,
+   so their errors on spike days are only weakly correlated; averaging quantiles cancels member-specific
+   misses (bagging-like variance reduction over the ICL estimator), which no single feature set does.
+Lesson for future screens: use est16, a 2-seed baseline, report excl5 + win rate, and treat < ~0.15
+MAE as noise unless it survives a full daily holdout.
+
+## Ensembling round (queued 2026-10-19 evening)
+Offline on screen days (vs ens3 = v0_ctx20k + c1_ctx20k + v8, MAE 4.474 / RMSE 8.73):
+  swap v8 -> e16_x9: 4.455 / 8.85; + e16_v8_knn40k: 4.429 / 8.70 (win .65);
+  c1_ctx20k + x9 + v8knn + logratio-target: 4.437 / 8.59; mean of 14 runs 4.468 / 8.90.
+  Greedy forward selection on half the days overfits (spike days split unevenly) but repeatedly picks
+  the logratio:smoothed_gas target run -> target-transform diversity is a useful member axis.
+Full daily members queued (est16): e16_x9_daily, e16_v8_knn40k_daily, e16_x9_logratio_daily,
+  e16_c1_ctx20k_daily (+ existing v0_ctx20k_daily, c1_ctx20k_daily, v8_daily, e16_x7_daily).
+Plan: evaluate on the 243 holdout days only (members/weights chosen on screen days): equal-weight
+  candidates, median vs mean, and walk-forward performance weighting (trailing-N-day member MAE).
 
 ### Round 2 (2026-10-19), from tios-docs survey; priority order
 Model-side (queued 10-19): target transforms (asinh:20, log, logratio:smoothed_gas, v8 diff:y_lag24),
