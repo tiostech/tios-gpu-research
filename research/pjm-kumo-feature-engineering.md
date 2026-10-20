@@ -247,6 +247,23 @@ Why it fails (consistent with the pre-run diagnostics):
   'learn from recent errors' role is already played by the appended context.
 Not pursued further. A correction on an *ensemble* (ensC) base would face the same white residuals.
 
+## Random-subspace (mtry) members (2026-10-20) -- fail-fast verdict: NO GAIN
+Design: `--feature-frac 0.6 --feature-seed 1..8` on x9 (39 of 65 features per member, fixed per run;
+  calendar from ts always kept), est4, `--eval-every 3`; members m_x9_f60_s{1..8}, ~6 min each.
+  Scored on screen days (script: research/pjm/eval_mtry.py, run on the box; quantile-average = mean of q500s).
+Results (screen days; e16_x9 4.500 / 9.26; ensC 4.429 / 8.70):
+  members: 4.54 - 5.19 MAE (median ~4.77), RMSE 9.2 - 12.3 -> every member but one worse than full x9.
+  mtry mean of 2 / 4 / 8: 4.891 / 4.760 / 4.672 (RMSE 10.05) -> vs e16_x9 -0.172 +- 0.065 (win .46).
+  ensC with x9 swapped for mtry8: 4.477 / 8.88 (-0.048 +- 0.016 vs ensC); ensC + mtry8: 4.454 (-0.025).
+  Member errors correlate 0.94 pairwise (0.99 between mtry8 and x9).
+Why: x9's 65 columns are already a curated set in which a handful (price history, gas, load/net-load
+  deltas, thermal stress) carry most of the signal; a 60% draw drops at least one of them in most
+  members (spike RMSE up to 12.3), and the members still retrieve nearly the same analogs, so the errors
+  stay ~0.94 correlated and averaging recovers only part of the loss. Feature bagging pays off for weak,
+  high-variance learners with many redundant columns (trees); an ICL model with few strong columns gets
+  bias, not diversity. Useful diversity here comes from *different information or context* (c1 regional,
+  ctx20k, kNN), not random column removal. A milder frac (0.8-0.9) would at best approach x9.
+
 ### Round 2 (2026-10-19), from tios-docs survey; priority order
 Model-side (queued 10-19): target transforms (asinh:20, log, logratio:smoothed_gas, v8 diff:y_lag24),
   context selection knn/mix from a 40k-row pool, 16 estimators (x2 seeds to measure seed noise).
