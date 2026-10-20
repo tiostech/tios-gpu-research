@@ -167,6 +167,19 @@ Full daily members queued (est16): e16_x9_daily, e16_v8_knn40k_daily, e16_x9_log
   e16_c1_ctx20k_daily (+ existing v0_ctx20k_daily, c1_ctx20k_daily, v8_daily, e16_x7_daily).
 Plan: evaluate on the 243 holdout days only (members/weights chosen on screen days): equal-weight
   candidates, median vs mean, and walk-forward performance weighting (trailing-N-day member MAE).
+RESULTS (2026-10-20, full daily 2025; HOLD = 243 days never used for selection; orig baseline HOLD
+  4.608 / 9.35; vs-ens3 diffs are paired day-bootstrap):
+  singles HOLD: e16_x9_daily 4.442 / 9.06 (best single; ~= ens3 4.452 / 8.93); e16_x7 4.461; c1_ctx20k
+  4.504; e16_c1_ctx20k 4.563 (est8 c1_ctx20k was a lucky seed); v8 4.561; v8_knn40k 4.679 / 10.12;
+  x9_logratio 4.776 / 10.47 (weak alone).
+  B = v0_ctx20k + c1_ctx20k + e16_x9: HOLD 4.404 / 8.81 (-0.048+-0.014 vs ens3, win .62) -> most
+      reliable gain; best holdout RMSE.
+  C = B + e16_v8_knn40k: HOLD 4.371 / 8.93 (-0.080+-0.038, win .58) -> best holdout MAE (-5.1% vs orig).
+  E = C + x9_logratio: 4.396 / 9.01; D (no v0_ctx20k): 4.404 / 9.16 -> logratio member does not hold up.
+  all-8 mean 4.387 / 8.96; all-8 median 4.380 / 8.88.
+  Walk-forward inverse-MAE weighting (trailing 30/60 days, p=1/2): 4.386-4.389 -> no gain over equal.
+  Takeaway: better members (x9) and context diversity (knn) add ~0.05-0.08 over ens3; weighting,
+  medians and more members do not. Predictions: box /scratch/outputs/pjm-fe/ens{B,C}_daily.
 
 ### Round 2 (2026-10-19), from tios-docs survey; priority order
 Model-side (queued 10-19): target transforms (asinh:20, log, logratio:smoothed_gas, v8 diff:y_lag24),
