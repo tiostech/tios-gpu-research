@@ -35,6 +35,9 @@ PJM DA energy price (`y` = `da_energy_price`), by feature engineering only.
   tios-docs rule: read-only queries on slave only, ask before querying.
 
 ## Data source
+- Target `y` = `da_energy_price` = PJM DA *system energy* component (not West Hub LMP): shiny's
+  `da_energy_prices()` (lib/trader-forecasting/tools.R) reads `pjm_energy_prices.da_energy_price`,
+  falling back to West Hub `lmp - congestion - loss` for missing days. Same for MISO.
 - Original dataset columns = subset of `PjmFlexDaep20261001$collect_data()` in
   ~/dev/tios-quant-shiny/lib/trader-forecasting/pjm-flex-daep-20261001.R
   (call via `PjmFlexDaep20261001$new()$do_collect_data(start, end)` after sourcing

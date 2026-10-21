@@ -6,6 +6,8 @@ Same setup as the PJM work (research/pjm-kumo-feature-engineering.md): Kumo-Tabu
 day number is not a multiple of 3 (243 days), as for PJM.
 
 ## Data
+- Target = MISO DA *system energy* component (`miso_energy_prices.da_energy_price` via shiny's
+  `da_energy_prices()`; fallback Indiana Hub `lmp - congestion - loss`), not Indiana Hub LMP.
 - `research/miso/collect_original.R` -> `MisoFlexDaep20251101$new()$do_collect_data()` (production
   class in ~/dev/tios-quant-shiny/lib/trader-forecasting/miso-flex-daep-20251101.R; fair
   forecast vintages, 25 min before the bid deadline) -> data/miso/miso_raw.parquet
