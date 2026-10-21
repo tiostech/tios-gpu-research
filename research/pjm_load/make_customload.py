@@ -75,4 +75,4 @@ for name, df in (("v0_customload_a", a), ("v0_customload_b", b)):
     v = df[df["split"] == "val"]
     d = (v["pjm_load"] - splits["val"]["pjm_load"].to_numpy()).abs()
     print(f"{name}: 2025 |custom - Meteologica| mean {d.mean():.0f} MW; "
-          f"thermal stress changed rows {(df['thermal_stress_all_pjm'] != full['thermal_stress_all_pjm']).sum()}")
+          f"thermal stress changed rows {((df['thermal_stress_all_pjm'] - full['thermal_stress_all_pjm']).abs() > 1e-9).sum()}")
