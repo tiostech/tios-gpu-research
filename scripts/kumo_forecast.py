@@ -268,6 +268,9 @@ def main() -> None:
                    help="'analog': key drivers used for the nearest-row search")
     p.add_argument("--context-pool", type=int, default=10_000,
                    help="History rows that 'knn'/'mix' may select from")
+    p.add_argument("--context-gap-hours", type=int, default=0,
+                   help="Walk-forward: exclude history rows within this many hours before the "
+                        "forecast window (actuals not yet known at forecast time)")
     p.add_argument("--feature-frac", type=float, default=1.0,
                    help="Random-subspace member: keep this fraction of feature columns")
     p.add_argument("--feature-seed", type=int, default=0, help="RNG seed for --feature-frac")
@@ -338,7 +341,13 @@ def main() -> None:
         scored = []
         for i, (_, rows) in enumerate(steps, 1):
             if (i - 1) % args.eval_every == 0:
-                parts.append(forecast(context, rows))
+                # --context-gap-hours: drop history newer than (forecast start - gap), for targets
+                # whose most recent actuals are not yet known at the forecast time (e.g. load).
+                known = context
+                if args.context_gap_hours > 0:
+                    cut = rows[args.time_col].min() - pd.Timedelta(hours=args.context_gap_hours)
+                    known = context[context[args.time_col] < cut]
+                parts.append(forecast(known, rows))
                 scored.append(rows.index)
                 last = rows[args.time_col].iloc[-1]
                 print(f"walk-forward: {i}/{len(steps)} steps (through {last:%Y-%m-%d})")
