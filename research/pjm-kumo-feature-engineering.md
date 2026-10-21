@@ -390,3 +390,17 @@ solarduckcurve and its lead1 diff recomputed (formulas checked exact). Baseline 
 - Load-only variant (v0_customload_a) skipped at the user's request.
 - Conclusion: the better load forecast doesn't help the price model; ~100 MW on ~100 GW is noise to it, and there
   is no gain in summer, where load drives spikes.
+
+## Artifact 3: production vs original Kumo baseline on the 2026 test set (2026-10-21)
+Page: https://claude.ai/artifact/84nZyh3RiGz6Zq5KhFbcyv (private). `research/pjm/artifact3_data.py` + `artifact3_template.html`.
+Run baseline_v0_test_daily: original baseline data (/scratch/data/pjm) with train = train + val (through 2025-12-31),
+val = test (2026-01-01 .. 2026-10-09 01:00); est8, seed 0, 10k context, daily walk-forward, no other changes.
+Scored on 281 complete days (to 2026-10-08). First look at the test split; nothing was selected on it.
+- 2026: prod 10.202 / 28.75 -> Kumo 9.478 / 28.06 (MAE -7.1%, RMSE -2.4%), gain +0.724 +- 0.533, win 69%
+  (sign test p 3e-10). 2025 for reference: -13.9%, +0.754 +- 0.146, win 69%.
+- Kumo better in every month but January (26.58 vs 23.28). Cold snap 2026-01-23..30 (feels-like -8F, prices to
+  $1,501 vs context max $537 from 2025-07-29): Kumo under-forecast 24-27 Jan (daily mean 134/242/348 vs actual
+  252/350/509; prod 232/276/398) -> reluctant extrapolation again; q900 reached 1,622 on 27 Jan; Kumo beat prod
+  on 28-29 Jan. Excluding that week (273 days): 8.36 -> 7.14 (-14.6%), gain +1.22 +- 0.25, win 70%.
+- Hour blocks: Kumo better 00-05/06-09/16-20, tie 21-23, slightly worse 10-15 (8.62 vs 8.46). 80% cov 0.86.
+- 2026 prices higher/more volatile (mean $64 vs $47), so both MAEs roughly double vs 2025.
