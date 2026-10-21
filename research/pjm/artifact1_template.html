@@ -1,0 +1,421 @@
+<title>PJM Production vs Kumo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/3.1.0/plotly-basic.min.js"></script>
+<style>
+/* Layout: single reading column (house style of the PJM leaderboard). Headline figures, then evidence
+   (breakdowns, worst days, interactive year), then the plain-language explainer, specs and small print. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --fg: #1b2230; --muted: #5d6676; --rule: #dde1e8;
+  --actual: #1b2230; --prod: #b5562a; --kumo: #1f6f8b; --ensc: #6a4c9c; --good: #2e7d4f; --bad: #a33a2b;
+  --band: rgba(31, 111, 139, .16);
+  --display: "Fraunces", Georgia, serif; --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --panel: #1a2029; --fg: #e4e8ee; --muted: #9aa3b1; --rule: #2c3440;
+  --actual: #e4e8ee; --prod: #e58a5c; --kumo: #5fb3cf; --ensc: #b39ddb; --good: #6cc48f; --bad: #e57b6b;
+  --band: rgba(95, 179, 207, .2); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1a2029; --fg: #e4e8ee; --muted: #9aa3b1; --rule: #2c3440;
+  --actual: #e4e8ee; --prod: #e58a5c; --kumo: #5fb3cf; --ensc: #b39ddb; --good: #6cc48f; --bad: #e57b6b;
+  --band: rgba(95, 179, 207, .2); color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1000px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 56px; display: grid; gap: 28px; }
+h1 { font-family: var(--display); font-weight: 600; font-size: 31px; line-height: 1.15; margin: 0; text-wrap: balance; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 14px; font-weight: 600; }
+h3 { margin: 0 0 4px; font-size: 16px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { color: var(--muted); display: grid; gap: 8px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 20px; min-width: 0; display: grid; gap: 16px; }
+.stack { display: grid; gap: 10px; }
+.sub { color: var(--muted); font-size: 13px; }
+.num, td.n, th.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 640px) { .figs { grid-template-columns: 1fr; } }
+.fig { border-top: 2px solid var(--kumo); padding-top: 10px; display: grid; gap: 2px; }
+.fig .big { font-family: var(--display); font-size: 34px; line-height: 1.1; color: var(--kumo); }
+.fig .lbl { font-size: 13px; color: var(--muted); }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+tr.grp td { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding-top: 14px; border-bottom: 0; font-weight: 600; }
+.win { color: var(--good); font-weight: 500; }
+.lose { color: var(--bad); }
+.key { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+.two > div { min-width: 0; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 5px 12px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--kumo); color: var(--panel); }
+.seg button:focus-visible { outline: 2px solid var(--kumo); outline-offset: -2px; }
+.bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.chip { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 1px 7px; border-radius: 10px; border: 1px solid currentColor; color: var(--muted); white-space: nowrap; }
+.prose { display: grid; gap: 12px; }
+.prose ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 72ch; }
+.cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 760px) { .cmp { grid-template-columns: 1fr; } }
+.cmp > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: grid; gap: 8px; align-content: start; }
+.cmp h3 { display: flex; gap: 8px; align-items: center; }
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; font-size: 13px; }
+@media (max-width: 640px) { .facts { grid-template-columns: 1fr 1fr; } }
+.facts div { display: grid; gap: 1px; }
+.facts b { font-family: var(--mono); font-weight: 500; font-size: 15px; }
+.specs td { font-size: 13.5px; }
+.specs td:first-child { font-weight: 600; white-space: nowrap; }
+.specs .code { font-family: var(--mono); font-size: 12px; color: var(--muted); font-weight: 400; display: block; }
+.specs ul { margin: 4px 0 0; padding-left: 18px; }
+.small { color: var(--muted); font-size: 13px; display: grid; gap: 8px; }
+.small p { max-width: none; }
+.plot { width: 100%; min-width: 0; }
+</style>
+
+<div class="wrap">
+  <header class="stack">
+    <h1>Kumo-Tabular beats the production PJM price forecast with the same inputs</h1>
+    <div class="lede">
+      <p>Forecast of the hourly PJM day-ahead <b>system energy price</b> for 2025 (the energy component of LMP, without congestion and losses). Both forecasts use only information available by 10:30 EPT the day before, and both use the same input data: the production model's own feature set plus the date and hour.</p>
+      <p>Kumo here is a no-frills run with default settings. It cut the average hourly error by about 14% and was more accurate on 7 days out of 10, in every season and every block of hours.</p>
+    </div>
+  </header>
+
+  <section class="panel" aria-labelledby="h-score">
+    <h2 id="h-score">Scorecard, 2025</h2>
+    <div class="figs" id="figs"></div>
+    <div class="tbl"><table id="score"></table></div>
+    <p class="sub">MAE = average absolute hourly error, $/MWh. RMSE weighs big misses more heavily. Gain = production MAE minus Kumo MAE, averaged over days, &plusmn; one bootstrap standard error. Days won = share of days where Kumo's daily MAE was lower. <b>Held-out days</b> are the 243 days of 2025 that were never used to choose any setting; the third column is the best combination found in later research, shown for reference.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-where">
+    <h2 id="h-where">Where the gain comes from</h2>
+    <div class="two">
+      <div class="stack"><h3>By season</h3><div class="sub">MAE, $/MWh, full 2025</div><div id="c-season" class="plot"></div></div>
+      <div class="stack"><h3>By hour of day (EPT, hour beginning)</h3><div class="sub">MAE, $/MWh, full 2025</div><div id="c-hour" class="plot"></div></div>
+    </div>
+    <div class="tbl"><table id="brk"></table></div>
+    <p>The gain is broad: Kumo has the lower error in every season and every hour block, and wins most days in each. It gains most in the morning ramp (06&ndash;09, &minus;23%), spring and winter, and least in the late evening (21&ndash;23) and autumn. The evening peak (16&ndash;20) remains the hardest period for both.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-worst">
+    <div class="bar">
+      <h2 id="h-worst" style="margin:0">The worst days of 2025</h2>
+      <div class="seg" role="group" aria-label="Rank days by">
+        <button type="button" id="rk-prod" aria-pressed="true">Ranked by production error</button>
+        <button type="button" id="rk-kumo" aria-pressed="false">Ranked by Kumo error</button>
+      </div>
+    </div>
+    <div class="tbl"><table id="worst"></table></div>
+    <div class="prose">
+      <p id="worst-note"></p>
+      <p id="blend-note"></p>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-ts">
+    <div class="bar">
+      <h2 id="h-ts" style="margin:0">2025, hour by hour</h2>
+      <div class="seg" role="group" aria-label="Resolution">
+        <button type="button" id="res-h" aria-pressed="true">Hourly</button>
+        <button type="button" id="res-d" aria-pressed="false">Daily average</button>
+      </div>
+    </div>
+    <p class="sub">Drag the slider or pick a window (1w, 1m, 3m, all). Click a legend entry to hide or show a line; the best research ensemble is hidden to start with.</p>
+    <div id="c-ts" class="plot"></div>
+    <h3>Rolling 7-day MAE</h3>
+    <div class="sub">Average absolute hourly error over the trailing 7 days, $/MWh</div>
+    <div id="c-roll" class="plot"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-what">
+    <h2 id="h-what">What Kumo-Tabular is, in plain language</h2>
+    <div class="cmp">
+      <div>
+        <h3><span class="key" style="background:var(--prod)"></span>Production forecast</h3>
+        <p>Every morning the production model is <b>trained</b>: random forests and a regression learn a fixed set of rules linking the inputs (load, wind, solar, gas, outages, weather, neighbouring markets) to price over the last two years. The rules are then applied to tomorrow. A third model decides how much to trust each of the two forecasts, hour by hour.</p>
+      </div>
+      <div>
+        <h3><span class="key" style="background:var(--kumo)"></span>Kumo-Tabular</h3>
+        <p>A large <b>pre-trained foundation model for tables</b>. It is never trained on our data. Each morning we hand it the last ~10,000 hours (about 14 months) of inputs together with the prices that actually cleared, plus tomorrow's 24 rows of inputs. It predicts by recognising which past hours look like tomorrow and how prices behaved then. This is called in-context learning; it works like giving an experienced analyst a stack of comparable days.</p>
+      </div>
+    </div>
+    <div class="prose">
+      <h3>What that means in practice</h3>
+      <ul>
+        <li><b>New data counts immediately.</b> Yesterday's prices join the context the next morning; nothing has to be refit.</li>
+        <li><b>No tuning.</b> The run on this page uses default settings and the production model's own inputs.</li>
+        <li><b>A full range, not one number.</b> It returns quantiles (for example a 10%&ndash;90% band) as well as the median scored here. The production forecast is a single number.</li>
+      </ul>
+    </div>
+    <div class="stack">
+      <h3 id="ex-title"></h3>
+      <div class="facts" id="ex-facts"></div>
+      <div id="c-ex" class="plot"></div>
+      <p id="ex-text"></p>
+    </div>
+    <div class="prose">
+      <h3>Trade-offs</h3>
+      <ul>
+        <li><b>It needs a GPU.</b> One day's forecast takes a few seconds on a single data-centre GPU (about 35 minutes for the whole year, replayed day by day).</li>
+        <li><b>It cannot extrapolate.</b> It reasons from what is in its context, so a price level or condition it has never seen there is hard for it to reach.</li>
+        <li><b>More inputs are not automatically better.</b> Extra columns that restate the same information dilute the ones that matter; in our research only carefully chosen additions helped.</li>
+        <li><b>A few extreme days still dominate the remaining error.</b> The ten worst days account for <span id="conc10"></span> of Kumo's total absolute error, and scarcity spikes are not fully predictable from day-ahead data.</li>
+      </ul>
+      <p><b>Same result in other markets.</b> With the same set-up (each market's production inputs plus the date and hour), Kumo also beat production in 2025 for MISO (MAE 3.39 vs 3.72, RMSE 6.86 vs 8.45) and SPP (3.93 vs 4.45, RMSE 6.53 vs 7.29).</p>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-specs">
+    <h2 id="h-specs">Model specifications</h2>
+    <div class="tbl"><table class="specs" style="min-width:1080px">
+      <thead><tr><th>Model</th><th>Target</th><th>Method</th><th>Training / context window</th><th>Retrain cadence</th><th>Inputs</th><th>Data cutoff</th><th>Estimators / seed</th><th>Scored period</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="key" style="background:var(--prod)"></span>Production<span class="code">flex.daep.20261001</span></td>
+          <td>DA system energy price, $/MWh</td>
+          <td>Hourly blend of two base models, weights from a third:
+            <ul>
+              <li><b>rf730d</b>: random forest predicting price</li>
+              <li><b>Scaled method</b>: regression of implied heat rate (price / gas) on a 5th-order polynomial of PJM thermal stress; forecast = yesterday's same-hour price &times; predicted change ratio (an adder when price &le; 0)</li>
+              <li><b>Blender</b>: random forest predicting rf730d's weight from 25 inputs (base-model disagreement, their errors 24h/48h back and 7-day rolling MAE, stress, gas, feels-like, solar change, price level, hour, day-over-day changes)</li>
+            </ul>
+            ICE-anchored and RT-despike forests are computed but carry zero weight.</td>
+          <td>Last 730 days for all three models</td>
+          <td>Daily</td>
+          <td>17 for rf730d: PJM thermal stress, load, wind, solar, solar change vs D&minus;1, solar duck curve and its lead change, gas, coal, nuclear outages (IIR), generation on outage, weighted feels-like temperature, MISO and SPP thermal stress, north and south external stress, southwest&ndash;east duck-curve spread. Scaled method adds smoothed gas and D&minus;1 price.</td>
+          <td>Published D&minus;1 10:30&ndash;10:35 EPT</td>
+          <td>500 trees per forest</td>
+          <td>2025, as published (<span class="code" style="display:inline">pjm_tios_forecasts</span>); point forecast</td>
+        </tr>
+        <tr>
+          <td><span class="key" style="background:var(--kumo)"></span>Kumo baseline<span class="code">baseline_v0_daily</span></td>
+          <td>Same</td>
+          <td>Kumo-Tabular (large), pre-trained; in-context learning, no fitting. Median (q500) of its quantile forecast is scored.</td>
+          <td>Last 10,000 hours before the forecast day (~14 months)</td>
+          <td>Daily: context refreshed with the latest actual prices</td>
+          <td>21 columns: the same 17 production inputs plus smoothed gas, date, hour and a date counter; the timestamp is also given as hour, weekday, month and day of year.</td>
+          <td>D&minus;1 10:30 EPT (input forecasts from the production data pull; prices through D&minus;1, which clear on D&minus;2)</td>
+          <td>8 / seed 0</td>
+          <td>2025, daily walk-forward</td>
+        </tr>
+        <tr>
+          <td><span class="key" style="background:var(--ensc)"></span>Best research ensemble<span class="code">ensC_daily</span></td>
+          <td>Same</td>
+          <td>Equal-weight average of the quantiles of four Kumo-Tabular runs:
+            <ul>
+              <li>baseline inputs, 20k-hour context (8 est.)</li>
+              <li>+ regional load / wind / solar, thermal capacity, supply cushion (33 columns), 20k-hour context (8 est.)</li>
+              <li>x9: + price history, day-over-day changes, regional, weather aggregates, forced outages, load-forecast spread (65 columns), 10k context (16 est.)</li>
+              <li>v8 (51 columns), context = the 10k nearest-neighbour hours from the last 40k (16 est.)</li>
+            </ul></td>
+          <td>10k&ndash;20k hours, per member</td>
+          <td>Daily</td>
+          <td>21&ndash;65 columns per member (above)</td>
+          <td>D&minus;1 10:30 EPT</td>
+          <td>8 or 16 / seed 0</td>
+          <td>2025, daily walk-forward</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="small" aria-labelledby="h-method">
+    <h2 id="h-method" style="margin:0">Method note</h2>
+    <p><b>Walk-forward.</b> For each day D of 2025, Kumo gets the context (inputs and actual prices) up to the end of D&minus;1 and forecasts D's 24 hours; D's actual prices are then appended and the process moves to D+1. Nothing from D or later is ever in the context.</p>
+    <p><b>Fairness cutoff.</b> Every input for day D is a forecast available by 10:30 EPT on D&minus;1 (PJM day-ahead bids close at 11:00). Day-ahead prices for D&minus;1 clear on D&minus;2, so they are known. The production forecast is the version published in <span class="num">pjm_tios_forecasts</span> at 10:30&ndash;10:35 EPT on D&minus;1.</p>
+    <p><b>Target.</b> PJM day-ahead system energy component (<span class="num">pjm_energy_prices.da_energy_price</span>), the same series the production model targets. 8,759 scored hours (one missing on the DST change).</p>
+    <p><b>Held-out days.</b> The 243 days of 2025 whose day number (counting from 1 January = 0) is not a multiple of 3. The other 122 days were used to pick settings in the wider research; the baseline itself was never tuned, so its full-year and held-out numbers are equally clean.</p>
+    <p><b>Uncertainty.</b> Paired day-block bootstrap: resample days with replacement (2,000 draws) and recompute the mean daily MAE gain; &plusmn; is one standard error.</p>
+    <p>Code: <span class="num">research/pjm/artifact1_data.py</span> (branch pjm-feature-engineering). Full research log: <span class="num">research/pjm-kumo-feature-engineering.md</span>.</p>
+  </section>
+</div>
+
+<script>
+const D = __DATA__;
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const f2 = v => v.toFixed(2), f3 = v => v.toFixed(3), pc = v => Math.round(v * 100) + "%";
+const NAMES = { prod: "Production", kumo: "Kumo baseline", ensc: "Best research ensemble" };
+const S = D.score;
+
+// ---------- scorecard
+$("figs").innerHTML = [
+  [`&minus;${S.hold.kumo.pct_mae.toFixed(0)}%`, `MAE on held-out days (${f3(S.hold.prod.mae)} &rarr; ${f3(S.hold.kumo.mae)} $/MWh)`],
+  [`&minus;${S.hold.kumo.pct_rmse.toFixed(0)}%`, `RMSE on held-out days (${f2(S.hold.prod.rmse)} &rarr; ${f2(S.hold.kumo.rmse)})`],
+  [pc(S.hold.kumo.win), `of held-out days where Kumo's error was lower`],
+].map(([b, l]) => `<div class="fig"><span class="big">${b}</span><span class="lbl">${l}</span></div>`).join("");
+
+const cols = ["prod", "kumo", "ensc"];
+let h = `<thead><tr><th></th>${cols.map(c => `<th class="n"><span class="key" style="background:var(--${c})"></span>${NAMES[c]}</th>`).join("")}</tr></thead><tbody>`;
+for (const [k, lab] of [["hold", `Held-out days (${S.hold.days})`], ["all", `Full 2025 (${S.all.days} days)`]]) {
+  const s = S[k];
+  h += `<tr class="grp"><td colspan="4">${lab}</td></tr>`;
+  h += `<tr><td>MAE</td>${cols.map(c => `<td class="n">${f3(s[c].mae)}${c === "prod" ? "" : ` <span class="win">&minus;${s[c].pct_mae.toFixed(1)}%</span>`}</td>`).join("")}</tr>`;
+  h += `<tr><td>RMSE</td>${cols.map(c => `<td class="n">${f2(s[c].rmse)}${c === "prod" ? "" : ` <span class="win">&minus;${s[c].pct_rmse.toFixed(1)}%</span>`}</td>`).join("")}</tr>`;
+  h += `<tr><td>Gain vs production</td>${cols.map(c => `<td class="n">${c === "prod" ? "&ndash;" : `${f3(s[c].gain)} &plusmn; ${f3(s[c].se)}`}</td>`).join("")}</tr>`;
+  h += `<tr><td>Days won vs production</td>${cols.map(c => `<td class="n">${c === "prod" ? "&ndash;" : pc(s[c].win)}</td>`).join("")}</tr>`;
+  h += `<tr><td>Average bias (actual &minus; forecast)</td>${cols.map(c => `<td class="n">${s[c].bias >= 0 ? "+" : ""}${f2(s[c].bias)}</td>`).join("")}</tr>`;
+}
+$("score").innerHTML = h + "</tbody>";
+
+// ---------- breakdown table
+const brkRows = (title, rows) => `<tr class="grp"><td colspan="6">${title}</td></tr>` + rows.map(r =>
+  `<tr><td>${r.k}</td><td class="n">${r.n.toLocaleString()}</td><td class="n">${f2(r.prod)}</td><td class="n">${f2(r.kumo)}</td><td class="n win">&minus;${((1 - r.kumo / r.prod) * 100).toFixed(0)}%</td><td class="n">${pc(r.win)}</td></tr>`).join("");
+$("brk").innerHTML = `<thead><tr><th></th><th class="n">Hours</th><th class="n">Production MAE</th><th class="n">Kumo MAE</th><th class="n">Change</th><th class="n">Days won</th></tr></thead><tbody>` +
+  brkRows("Season", D.by_season) + brkRows("Hour block (EPT)", D.by_hour) + "</tbody>";
+
+// ---------- worst days
+function worst(which) {
+  const rows = which === "prod" ? D.worst_prod : D.worst_kumo;
+  $("worst").innerHTML = `<thead><tr><th>Day</th><th class="n">Peak price</th><th class="n">Daily avg price</th><th class="n">Production MAE</th><th class="n">Kumo MAE</th><th class="n">Ensemble MAE</th><th>Set</th></tr></thead><tbody>` +
+    rows.map(r => {
+      const dt = new Date(r.d + "T12:00:00Z");
+      const lab = dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+      const kw = r.kumo < r.prod;
+      return `<tr><td>${lab}</td><td class="n">${f2(r.ymax)}</td><td class="n">${f2(r.ymean)}</td><td class="n ${kw ? "" : "win"}">${f2(r.prod)}</td><td class="n ${kw ? "win" : ""}">${f2(r.kumo)}</td><td class="n">${f2(r.ensc)}</td><td><span class="chip">${r.hold ? "held out" : "selection"}</span></td></tr>`;
+    }).join("") + "</tbody>";
+  for (const b of ["prod", "kumo"]) $("rk-" + b).setAttribute("aria-pressed", String(b === which));
+}
+$("rk-prod").onclick = () => worst("prod");
+$("rk-kumo").onclick = () => worst("kumo");
+worst("prod");
+const C = D.conc, B = D.blend;
+$("worst-note").innerHTML = `Prices in $/MWh; the lower daily MAE of the two is in green. These days come in episodes: the January cold snap (18&ndash;23 Jan), the June heat wave (24&ndash;25 Jun) and late July (28&ndash;30 Jul). Kumo misses them by less on most days, but not all: on 21&ndash;22 January, after the peak passed, it stayed too high for longer than production did. The ten worst days hold ${pc(C.prod.top10)} of production's total absolute error and ${pc(C.kumo.top10)} of Kumo's.`;
+$("blend-note").innerHTML = `<b>Does mixing in the production forecast help?</b> No. The two forecasts' errors are strongly correlated (${f2(B.err_corr)}; ${f2(B.err_corr_ensc)} for the research ensemble), so production adds little new information. The best production weight chosen on the selection days was ${B.w_pick.toFixed(2)} for the baseline (held-out MAE ${f3(B.hold_mae_pick)} vs ${f3(B.hold_mae_kumo)}, within noise) and 0 for the ensemble; a 50/50 mix is worse (${f3(B.hold_mae_5050)}).`;
+$("conc10").textContent = pc(C.kumo.top10);
+
+// ---------- time axes
+const H = D.hourly, t0 = Date.parse(H.t0.replace(" ", "T") + "Z");
+const pad = n => String(n).padStart(2, "0");
+const iso = ms => { const d = new Date(ms); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00`; };
+const hx = H.y.map((_, i) => iso(t0 + i * 3600e3));
+const daily = {};
+{
+  const days = [];
+  for (let i = 0; i < hx.length; i += 24) days.push(hx[i].slice(0, 10));
+  daily.x = days;
+  for (const k of ["y", "prod", "kumo", "ensc"]) daily[k] = days.map((_, j) => {
+    const v = H[k].slice(j * 24, j * 24 + 24).filter(x => x !== null);
+    return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 100) / 100 : null;
+  });
+}
+let res = "h";
+
+function baseLayout(extra = {}) {
+  const fg = css("--fg"), mu = css("--muted"), ru = css("--rule");
+  return Object.assign({
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { family: css("--body").split(",")[0].replace(/"/g, "") + ", system-ui, sans-serif", color: fg, size: 12 },
+    margin: { l: 52, r: 12, t: 10, b: 36 },
+    xaxis: { gridcolor: ru, linecolor: ru, tickcolor: ru, zeroline: false, color: mu },
+    yaxis: { gridcolor: ru, linecolor: ru, zeroline: false, color: mu },
+    legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", bgcolor: "rgba(0,0,0,0)", font: { color: fg } },
+    hoverlabel: { bgcolor: css("--panel"), bordercolor: ru, font: { color: fg, family: "IBM Plex Mono, ui-monospace, monospace" } },
+  }, extra);
+}
+const CFG = { displayModeBar: false, responsive: true };
+const line = (x, y, name, color, extra = {}) => Object.assign({ x, y, name, type: "scatter", mode: "lines", line: { color, width: 1.6 }, hovertemplate: "%{y:.2f}" }, extra);
+
+function drawBars(el, rows) {
+  const ks = rows.map(r => r.k.replace(/ \(.*\)/, ""));
+  Plotly.react(el, ["prod", "kumo", "ensc"].map(c => ({
+    type: "bar", orientation: "h", y: ks, x: rows.map(r => r[c]), name: NAMES[c], marker: { color: css("--" + c) },
+    text: rows.map(r => f2(r[c])), textposition: "outside", cliponaxis: false, textfont: { color: css("--fg"), size: 11 },
+    hovertemplate: "%{x:.2f}<extra>" + NAMES[c] + "</extra>",
+  })), baseLayout({
+    barmode: "group", bargap: 0.25, height: 300, margin: { l: 56, r: 36, t: 10, b: 30 },
+    yaxis: { type: "category", autorange: "reversed", color: css("--fg"), linecolor: css("--rule"), gridcolor: "rgba(0,0,0,0)" },
+    legend: { orientation: "h", x: 0, y: -0.12, yanchor: "top", font: { color: css("--fg") } },
+  }), CFG);
+}
+
+function drawTS() {
+  const src = res === "h" ? { x: hx, ...H } : daily;
+  const xs = res === "h" ? hx : daily.x;
+  const fmt = res === "h" ? "%a %d %b %Y, %H:00" : "%a %d %b %Y";
+  Plotly.react($("c-ts"), [
+    line(xs, src.y, "Actual price", css("--actual"), { line: { color: css("--actual"), width: 1.4 } }),
+    line(xs, src.prod, "Production", css("--prod")),
+    line(xs, src.kumo, "Kumo baseline", css("--kumo")),
+    line(xs, src.ensc, "Best research ensemble", css("--ensc"), { visible: "legendonly" }),
+  ], baseLayout({
+    height: 470, hovermode: "x unified",
+    margin: { l: 52, r: 12, t: 40, b: 10 },
+    xaxis: {
+      type: "date", hoverformat: fmt, gridcolor: css("--rule"), linecolor: css("--rule"), color: css("--muted"),
+      range: res === "h" ? ["2025-01-13", "2025-01-27"] : ["2025-01-01", "2025-12-31 23:00"],
+      rangeslider: { visible: true, thickness: 0.08, bgcolor: css("--bg"), bordercolor: css("--rule") },
+      rangeselector: {
+        x: 1, xanchor: "right", y: 1.02, yanchor: "bottom",
+        bgcolor: css("--panel"), activecolor: css("--rule"), bordercolor: css("--rule"), borderwidth: 1, font: { color: css("--fg") },
+        buttons: [
+          { count: 7, label: "1w", step: "day", stepmode: "backward" },
+          { count: 1, label: "1m", step: "month", stepmode: "backward" },
+          { count: 3, label: "3m", step: "month", stepmode: "backward" },
+          { step: "all", label: "all" },
+        ],
+      },
+    },
+    yaxis: { title: { text: "$/MWh" }, gridcolor: css("--rule"), color: css("--muted"), zeroline: false, fixedrange: false },
+    legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", font: { color: css("--fg") }, bgcolor: "rgba(0,0,0,0)" },
+  }), CFG);
+}
+
+function drawRoll() {
+  const R = D.daily;
+  Plotly.react($("c-roll"), [
+    line(R.d, R.roll_prod, "Production", css("--prod")),
+    line(R.d, R.roll_kumo, "Kumo baseline", css("--kumo")),
+    line(R.d, R.roll_ensc, "Best research ensemble", css("--ensc"), { visible: "legendonly" }),
+  ], baseLayout({
+    height: 260, hovermode: "x unified", margin: { l: 52, r: 12, t: 30, b: 30 },
+    xaxis: { type: "date", hoverformat: "%d %b %Y", gridcolor: css("--rule"), color: css("--muted") },
+    yaxis: { title: { text: "$/MWh" }, gridcolor: css("--rule"), color: css("--muted"), zeroline: false },
+  }), CFG);
+}
+
+// ---------- example day
+const E = D.example;
+const exDate = new Date(E.d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+$("ex-title").textContent = `Example: ${exDate}, during the January cold snap`;
+const gw = v => (v / 1000).toFixed(1) + " GW";
+$("ex-facts").innerHTML = [
+  ["Feels-like temperature", `${E.feelslike.day_min.toFixed(0)}&deg;F to ${E.feelslike.day_max.toFixed(0)}&deg;F`, `2025 median ${E.feelslike.year_median.toFixed(0)}&deg;F`],
+  ["Forecast load, peak", gw(E.load.day_max), `2025 median ${gw(E.load.year_median)}`],
+  ["Gas price used", `$${E.gas.day_max.toFixed(2)}`, `2025 median $${E.gas.year_median.toFixed(2)}/MMBtu`],
+  ["Daily MAE", `${E.prod_mae.toFixed(0)} vs ${E.kumo_mae.toFixed(0)}`, "production vs Kumo, $/MWh"],
+].map(([a, b, c]) => `<div><span class="sub">${a}</span><b>${b}</b><span class="sub">${c}</span></div>`).join("");
+const pk = a => Math.max(...a);
+$("ex-text").innerHTML = `The actual price peaked at $${pk(E.y).toFixed(0)}/MWh in the evening. Production topped out at $${pk(E.prod).toFixed(0)} and missed the 07:00 spike ($${E.y[7].toFixed(0)}) almost entirely. Kumo's context held the hours that most resemble this day: the January 2024 cold spell (16&ndash;17 Jan 2024: feels-like down to &minus;2&deg;F, prices up to $287) and the cold days earlier the same week. It forecast $${E.kumo[7].toFixed(0)} at 07:00 and an evening peak of $${pk(E.kumo).toFixed(0)}, and the actual price fell inside its 10%&ndash;90% band in 23 of 24 hours. It still under-forecast the midday hours, and on the next two days it was too high for too long (see the worst-days table).`;
+
+function drawEx() {
+  const x = E.hours.map(h => pad(h) + ":00");
+  Plotly.react($("c-ex"), [
+    { x, y: E.q100, type: "scatter", mode: "lines", line: { width: 0 }, hoverinfo: "skip", showlegend: false },
+    { x, y: E.q900, type: "scatter", mode: "lines", line: { width: 0 }, fill: "tonexty", fillcolor: css("--band"), name: "Kumo 10%–90% band", hoverinfo: "skip" },
+    line(x, E.y, "Actual price", css("--actual"), { line: { color: css("--actual"), width: 2.2 } }),
+    line(x, E.prod, "Production", css("--prod"), { line: { color: css("--prod"), width: 2 } }),
+    line(x, E.kumo, "Kumo baseline (median)", css("--kumo"), { line: { color: css("--kumo"), width: 2 } }),
+  ], baseLayout({
+    height: 320, hovermode: "x unified", margin: { l: 52, r: 12, t: 30, b: 40 },
+    xaxis: { title: { text: "Hour beginning, EPT" }, gridcolor: css("--rule"), color: css("--muted"), dtick: 3 },
+    yaxis: { title: { text: "$/MWh" }, gridcolor: css("--rule"), color: css("--muted"), zeroline: false },
+  }), CFG);
+}
+
+function drawAll() {
+  drawBars($("c-season"), D.by_season);
+  drawBars($("c-hour"), D.by_hour);
+  drawTS(); drawRoll(); drawEx();
+}
+for (const r of ["h", "d"]) $("res-" + r).onclick = () => {
+  res = r;
+  for (const b of ["h", "d"]) $("res-" + b).setAttribute("aria-pressed", String(b === r));
+  drawTS();
+};
+drawAll();
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawAll); } catch (e) {}
+new MutationObserver(drawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>

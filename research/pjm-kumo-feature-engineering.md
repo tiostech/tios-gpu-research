@@ -347,3 +347,17 @@ Timing: PJM cutoff 09:30 CT (deadline 10:00 CT); MISO data in fixed EST; forecas
 - calendar: holidays, weekday/weekend flags
 - drop redundant (dt, dt_ordinal, hr) features
 - max-context / num-estimators tuning (secondary)
+
+## Stakeholder artifact 1: production vs Kumo-Tabular (2026-10-21)
+Page: https://claude.ai/artifact/SPd1KUEWoAyqLpFArYYLJw (private). Built by `research/pjm/artifact1_data.py`
+(+ `artifact1_template.html`; output outputs/pjm-fe/artifact1/) from existing predictions; no GPU, no SQL.
+Production flex.daep.20261001 vs original Kumo baseline (same 17 RF inputs + smoothed gas + time columns):
+  HOLD 5.380 / 11.44 -> 4.608 / 9.35 (MAE -14.3%, RMSE -18.3%), daily gain +0.772 +- 0.176, wins 70% of days;
+  ALL 5.426 / 11.68 -> 4.672 / 9.49 (-13.9%), +0.754 +- 0.146, win 69%. ensC (reference) HOLD 4.371 / 8.93, win 74%.
+  Kumo lower MAE in every season (-8% SON .. -17.5% MAM) and hour block (-5% HB21-23 .. -23% HB06-09).
+  Example day 2025-01-20 (cold snap): prod daily MAE 67.0 vs Kumo 38.8; Kumo hit the 07:00 spike (257 vs 261 actual).
+  Prod better on 2025-01-21/22/18 (Kumo stayed high after the peak). Blend: err corr 0.85 (ensC 0.82);
+  picked prod weight 0.15 for baseline -> HOLD 4.591 vs 4.608 (noise), 0 for ensC; 50/50 worse (4.720).
+Production model structure (pjm-flex-daep-20261001.R): rf730d (ranger 500 trees, 17 features, last 730 d) +
+  scaled method (lm heat rate ~ poly5(thermal stress), 730 d; D-1 same-hour price x ratio), blended hourly by a
+  ranger blender (25 features, 730 d); ICE RF and RT-despike RF computed with alloc 0.
