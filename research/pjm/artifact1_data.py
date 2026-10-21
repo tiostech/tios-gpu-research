@@ -146,11 +146,28 @@ for col, nm in (("feelslike_weightedavg", "feelslike"), ("pjm_load", "load"),
 print(f"example day {example['d']}: ymax {example['ymax']:.0f}, prod {example['prod_mae']:.1f} "
       f"vs kumo {example['kumo_mae']:.1f}")
 
+# extrapolation check: Kumo forecasts vs the price range of its own context (last 10k hours before each day)
+hist = pd.concat([pd.read_parquet(ROOT / "data/pjm-fe/v0" / f"{s}.parquet") for s in ("train", "val")])
+hist = hist.assign(ts=pd.to_datetime(hist["ts"])).set_index("ts")["y"]
+xr = []
+for d, g in base.groupby(base.index.floor("D")):
+    ctx = hist[hist.index < d].dropna().iloc[-10000:]
+    xr.append({"d": d, "cmax": ctx.max(), "q500": g["q500"].max(), "q950": g["q950"].max(), "ymax": g["y_true"].max()})
+xr = pd.DataFrame(xr).set_index("d")
+rec = xr[xr["ymax"] > xr["cmax"]]
+extrap = {"days_q500_above": int((xr["q500"] > xr["cmax"]).sum()), "days_q950_above": int((xr["q950"] > xr["cmax"]).sum()),
+          "max_q950_ratio": float((xr["q950"] / xr["cmax"]).max()),
+          "best": {"d": (bd := (xr["q500"] / xr["cmax"]).idxmax()).strftime("%Y-%m-%d"),
+                   "q500": float(xr.loc[bd, "q500"]), "cmax": float(xr.loc[bd, "cmax"])},
+          "records": [{"d": d.strftime("%Y-%m-%d"), "cmax": float(v.cmax), "ymax": float(v.ymax), "q500": float(v.q500),
+                       "q950": float(v.q950)} for d, v in rec.iterrows()]}
+print("extrapolation:", extrap)
+
 r2 = lambda s: [None if pd.isna(v) else round(float(v), 2) for v in s]  # noqa: E731
 out = {
     "score": score, "by_season": by_season, "by_hour": by_hour,
     "worst_prod": days_tbl(worst_prod), "worst_kumo": days_tbl(worst_kumo), "conc": conc,
-    "blend": blend, "example": example,
+    "blend": blend, "example": example, "extrap": extrap,
     "hourly": {"t0": str(P.index[0]), "y": r2(y), "prod": r2(P["prod"]), "kumo": r2(P["kumo"]),
                "ensc": r2(P["ensc"])},
     "daily": {"d": [d.strftime("%Y-%m-%d") for d in roll.index], "roll_prod": r2(roll["prod"]),

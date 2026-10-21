@@ -361,3 +361,10 @@ Production flex.daep.20261001 vs original Kumo baseline (same 17 RF inputs + smo
 Production model structure (pjm-flex-daep-20261001.R): rf730d (ranger 500 trees, 17 features, last 730 d) +
   scaled method (lm heat rate ~ poly5(thermal stress), 730 d; D-1 same-hour price x ratio), blended hourly by a
   ranger blender (25 features, 730 d); ICE RF and RT-despike RF computed with alloc 0.
+Artifact 1 v2 (2026-10-21): (1) "cannot extrapolate" corrected. Check (artifact1_data.py, baseline v0 vs the max
+  price in each day's 10k-hour context): median q500 above the context max on 3 days of 2025 (2025-01-21: 365 vs
+  308), q950 above it on 11 days (up to 2.4x). 2025 set a new context high on 4 days; the median exceeded the
+  old high on 01-20/01-21 but stayed below it on 06-24 (297 vs old high 312, actual 404) and 07-29 (374 vs 404,
+  actual 537) -> can extrapolate, but reluctantly (unlike RFs, bounded by the training max).
+  (2) Added a "How the 2025 days were used" section: walk-forward everywhere + 122 selection / 243 held-out days;
+  only research variants/ensembles were chosen on selection days; baseline and production involve no selection.

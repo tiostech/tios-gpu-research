@@ -71,6 +71,12 @@ tr.grp td { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; c
 .small { color: var(--muted); font-size: 13px; display: grid; gap: 8px; }
 .small p { max-width: none; }
 .plot { width: 100%; min-width: 0; }
+.daystrip { display: grid; grid-template-columns: repeat(53, minmax(0, 1fr)); grid-auto-flow: column; grid-template-rows: repeat(7, auto); gap: 2px; max-width: 760px; }
+.cell { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.daystrip .cell { width: auto; aspect-ratio: 1; margin: 0; max-width: 100%; }
+.cell.sel { background: var(--muted); }
+.cell.hold { background: var(--kumo); }
+.legend-row { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--muted); }
 </style>
 
 <div class="wrap">
@@ -86,7 +92,28 @@ tr.grp td { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; c
     <h2 id="h-score">Scorecard, 2025</h2>
     <div class="figs" id="figs"></div>
     <div class="tbl"><table id="score"></table></div>
-    <p class="sub">MAE = average absolute hourly error, $/MWh. RMSE weighs big misses more heavily. Gain = production MAE minus Kumo MAE, averaged over days, &plusmn; one bootstrap standard error. Days won = share of days where Kumo's daily MAE was lower. <b>Held-out days</b> are the 243 days of 2025 that were never used to choose any setting; the third column is the best combination found in later research, shown for reference.</p>
+    <p class="sub">MAE = average absolute hourly error, $/MWh. RMSE weighs big misses more heavily. Gain = production MAE minus Kumo MAE, averaged over days, &plusmn; one bootstrap standard error. Days won = share of days where Kumo's daily MAE was lower. <b>Held-out days</b> are the 243 days of 2025 never used to choose any setting (see below). The third column is the best combination found in later research, shown for reference.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-days">
+    <h2 id="h-days">How the 2025 days were used</h2>
+    <div class="prose">
+      <p><b>Every forecast on this page is out of sample in time.</b> All models were replayed day by day through 2025 (walk-forward): the forecast for each day uses only information from before that day, and nothing is ever fitted on the day being scored. The production forecast is the one actually published each morning.</p>
+      <p><b>The days were also split into two sets.</b> After the baseline run, our research tried many Kumo variants: extra inputs, longer context, more estimators, ensembles, blend weights. Every one of those choices was made by looking at only one day in three (the <b>selection days</b>, 122 days). The other <b>243 held-out days</b> were never looked at while choosing. They were scored once, at the end.</p>
+    </div>
+    <div class="stack">
+      <div id="daystrip" class="daystrip" role="img" aria-label="2025 calendar: every third day is a selection day, the rest are held out"></div>
+      <div class="legend-row"><span><i class="cell sel"></i>Selection day (used to choose settings)</span><span><i class="cell hold"></i>Held-out day (never used for any choice)</span></div>
+    </div>
+    <div class="tbl"><table>
+      <thead><tr><th>Forecast</th><th>Was anything about it chosen using 2025 results?</th><th>Which number to trust</th></tr></thead>
+      <tbody>
+        <tr><td><span class="key" style="background:var(--prod)"></span>Production</td><td>No; it is the forecast as published.</td><td>Full year and held-out are equally fair.</td></tr>
+        <tr><td><span class="key" style="background:var(--kumo)"></span>Kumo baseline</td><td>No; it is the original set-up (production's inputs, default settings), run once before any research.</td><td>Full year and held-out are equally fair.</td></tr>
+        <tr><td><span class="key" style="background:var(--ensc)"></span>Best research ensemble</td><td>Yes; its members and settings were picked on the selection days.</td><td>Held-out days only. Its full-year figure is slightly flattering.</td></tr>
+      </tbody>
+    </table></div>
+    <p class="sub">Why every third day instead of, say, the last four months: an interleaved split gives both sets the same mix of seasons, weekdays and price spikes. The two sets are not fully independent, since a multi-day event such as the January cold snap falls partly in each, so the ensemble's held-out number may still be a little optimistic. This doesn't affect the production vs Kumo baseline comparison, where nothing was selected.</p>
   </section>
 
   <section class="panel" aria-labelledby="h-where">
@@ -159,7 +186,7 @@ tr.grp td { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; c
       <h3>Trade-offs</h3>
       <ul>
         <li><b>It needs a GPU.</b> One day's forecast takes a few seconds on a single data-centre GPU (about 35 minutes for the whole year, replayed day by day).</li>
-        <li><b>It cannot extrapolate.</b> It reasons from what is in its context, so a price level or condition it has never seen there is hard for it to reach.</li>
+        <li id="extrap"></li>
         <li><b>More inputs are not automatically better.</b> Extra columns that restate the same information dilute the ones that matter; in our research only carefully chosen additions helped.</li>
         <li><b>A few extreme days still dominate the remaining error.</b> The ten worst days account for <span id="conc10"></span> of Kumo's total absolute error, and scarcity spikes are not fully predictable from day-ahead data.</li>
       </ul>
@@ -226,7 +253,7 @@ tr.grp td { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; c
     <p><b>Walk-forward.</b> For each day D of 2025, Kumo gets the context (inputs and actual prices) up to the end of D&minus;1 and forecasts D's 24 hours; D's actual prices are then appended and the process moves to D+1. Nothing from D or later is ever in the context.</p>
     <p><b>Fairness cutoff.</b> Every input for day D is a forecast available by 10:30 EPT on D&minus;1 (PJM day-ahead bids close at 11:00). Day-ahead prices for D&minus;1 clear on D&minus;2, so they are known. The production forecast is the version published in <span class="num">pjm_tios_forecasts</span> at 10:30&ndash;10:35 EPT on D&minus;1.</p>
     <p><b>Target.</b> PJM day-ahead system energy component (<span class="num">pjm_energy_prices.da_energy_price</span>), the same series the production model targets. 8,759 scored hours (one missing on the DST change).</p>
-    <p><b>Held-out days.</b> The 243 days of 2025 whose day number (counting from 1 January = 0) is not a multiple of 3. The other 122 days were used to pick settings in the wider research; the baseline itself was never tuned, so its full-year and held-out numbers are equally clean.</p>
+    <p><b>Held-out days.</b> The 243 days of 2025 whose day number (counting from 1 January = 0) is not a multiple of 3. The other 122 selection days were used for every choice in the wider research: screening feature sets (screening runs forecast only those days), context size and estimator count, ensemble members, and blend or correction weights. The baseline and production forecasts involve no such choice.</p>
     <p><b>Uncertainty.</b> Paired day-block bootstrap: resample days with replacement (2,000 draws) and recompute the mean daily MAE gain; &plusmn; is one standard error.</p>
     <p>Code: <span class="num">research/pjm/artifact1_data.py</span> (branch pjm-feature-engineering). Full research log: <span class="num">research/pjm-kumo-feature-engineering.md</span>.</p>
   </section>
@@ -285,6 +312,19 @@ const C = D.conc, B = D.blend;
 $("worst-note").innerHTML = `Prices in $/MWh; the lower daily MAE of the two is in green. These days come in episodes: the January cold snap (18&ndash;23 Jan), the June heat wave (24&ndash;25 Jun) and late July (28&ndash;30 Jul). Kumo misses them by less on most days, but not all: on 21&ndash;22 January, after the peak passed, it stayed too high for longer than production did. The ten worst days hold ${pc(C.prod.top10)} of production's total absolute error and ${pc(C.kumo.top10)} of Kumo's.`;
 $("blend-note").innerHTML = `<b>Does mixing in the production forecast help?</b> No. The two forecasts' errors are strongly correlated (${f2(B.err_corr)}; ${f2(B.err_corr_ensc)} for the research ensemble), so production adds little new information. The best production weight chosen on the selection days was ${B.w_pick.toFixed(2)} for the baseline (held-out MAE ${f3(B.hold_mae_pick)} vs ${f3(B.hold_mae_kumo)}, within noise) and 0 for the ensemble; a 50/50 mix is worse (${f3(B.hold_mae_5050)}).`;
 $("conc10").textContent = pc(C.kumo.top10);
+const X = D.extrap, xd = d => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const recs = X.records, held = recs.filter(r => r.q500 < r.cmax);
+$("extrap").innerHTML = `<b>It can go beyond what it has seen, but reluctantly.</b> A random forest can never forecast a price above the highest one in its training data. Kumo can, and it did: on ${xd(X.best.d)} its median forecast peaked at $${X.best.q500.toFixed(0)} when the highest price in its 10,000-hour context was $${X.best.cmax.toFixed(0)}, and on ${X.days_q950_above} days its 95% quantile was above the context high (up to ${X.max_q950_ratio.toFixed(1)}&times; it). Its median stays close to the range it has seen, though. 2025 set a new high on ${recs.length} days, and on the biggest of them the median stayed below the old high: ${held.map(r => `${xd(r.d)} ($${r.q500.toFixed(0)} forecast vs a previous high of $${r.cmax.toFixed(0)} and an actual $${r.ymax.toFixed(0)})`).join("; ")}.`;
+{
+  const start = Date.UTC(2025, 0, 1), dow0 = (new Date(start).getUTCDay() + 6) % 7;
+  let cells = "";
+  for (let i = 0; i < dow0; i++) cells += `<i class="cell" style="visibility:hidden"></i>`;
+  for (let k = 0; k < 365; k++) {
+    const d = new Date(start + k * 864e5).toISOString().slice(0, 10);
+    cells += `<i class="cell ${k % 3 === 0 ? "sel" : "hold"}" title="${d}: ${k % 3 === 0 ? "selection" : "held out"}"></i>`;
+  }
+  $("daystrip").innerHTML = cells;
+}
 
 // ---------- time axes
 const H = D.hourly, t0 = Date.parse(H.t0.replace(" ", "T") + "Z");

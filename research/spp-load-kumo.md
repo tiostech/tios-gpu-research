@@ -63,7 +63,7 @@ audit 2018-2025: 0 rows issued after D-1 09:30) + collect.R. Features `research/
 - A2: -21% MAE / -16% RMSE vs Meteologica; better in every season (DJF 438 vs 632, SON 318 vs 507,
   MAM 344 vs 409; JJA 620 vs 642) and every hour block.
 - A0 (weather only) is worse: load growth puts 2025 levels above much of the 10k-hour context, and
-  Kumo cannot extrapolate (bias +279). The ISO forecast supplies the current level (A1 bias +27).
+  Kumo extrapolates only reluctantly (bias +279; see the PJM price log for a check of how far its forecasts go beyond the context range). The ISO forecast supplies the current level (A1 bias +27).
 - Everyone under-forecasts 2025 (load growth). Next ideas: A1 without SPS (clean ISO-only
   comparison); relative target `--target-transform ratio:all_samehour_7d_mean` to remove the
   growth trend.
