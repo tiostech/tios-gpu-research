@@ -27,6 +27,15 @@ Meteologica OKGE: MAE 131.7 / RMSE 183.4 / MAPE 2.84% (bias y - fc +21.9).
 | L0_branch LEAKY (D-1 actuals in context) | 118.8 / 169.0 | 119.1 | +13.0 +- 4.7 (not valid) |
 | L0_branch_gap24 | 134.1 / 185.1 | 133.3 | -1.2 +- 4.9 (par) |
 | L0_gap24 + Meteologica blend (w_met 0.60) | | 121.0 | +11.1 +- 2.3 (win .63) |
+| L1_extra_gap24 | 130.8 / 182.9 | 129.7 | +2.4 +- 4.6 (par) |
+| L1_gap24 + Meteologica blend (w_met 0.55) | | 119.7 | +12.4 +- 2.3 (win .67) |
+| **L2_with_meteo_gap24** (Meteologica as a feature) | **121.8 / 172.8** (MAPE 2.63%) | **121.2** | **+10.9 +- 3.2 (win .62)** |
+| L2_gap24 + Meteologica blend (w_met 0.30) | | 119.4 | +12.7 +- 2.4 (only +1.8 +- 1.1 vs L2) |
 - The whole apparent L0 edge came from the leak (worth ~15 MW MAE, most in HB 00-05: 75.6 vs 101.4).
 - Leak-free, Kumo with the branch features is on par with Meteologica, but their errors differ enough
   that a 60/40 Meteologica/Kumo blend beats Meteologica by ~11 MW (8%) on held-out days.
+- L2 (Kumo with Meteologica as an input) beats Meteologica on its own: -7.5% MAE on full 2025, better in
+  every season (DJF 113 vs 128, SON 120 vs 135; JJA 163 vs 164 ~tie) and every hour block. Further
+  blending with Meteologica adds little (+1.8 MW), i.e. L2 already absorbs what Meteologica knows.
+- L1 extras (OKGE own lags >= 48h, station detail, CDD/HDD) are worth ~3 MW over L0: small.
+- All Kumo runs and Meteologica under-forecast on average (y - fc +15 to +22 MW).
