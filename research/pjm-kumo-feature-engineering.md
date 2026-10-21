@@ -368,3 +368,25 @@ Artifact 1 v2 (2026-10-21): (1) "cannot extrapolate" corrected. Check (artifact1
   actual 537) -> can extrapolate, but reluctantly (unlike RFs, bounded by the training max).
   (2) Added a "How the 2025 days were used" section: walk-forward everywhere + 122 selection / 243 held-out days;
   only research variants/ensembles were chosen on selection days; baseline and production involve no selection.
+
+## Artifact 2: Kumo PJM ALL load forecast and its effect on the price model (2026-10-21)
+
+Page: https://claude.ai/artifact/4TGPBZGrscdy1zawsqqoWM (private). Scripts in `research/pjm_load/`
+(collect.R, make_features.py, make_customload.py, artifact2_data.py, artifact2_template.html).
+
+**Load (target pjm_hourly_load ALL, walk-forward daily, --context-gap-hours 24, actual load only as lags >= 48h).**
+Benchmark Meteologica ALL (D-1 ~10:20 EPT vintage = v0's pjm_load). ISO pjm_load_forecast dropped: no fair vintage.
+- Screens (every 3rd day of 2025, 122 days): Meteologica 1297 MW MAE; P0 weather/calendar/lags only 1701 (+31%,
+  loses, as in SPP); P2 = P0 + Meteologica regional + ALL forecasts 1234.
+- P2 backpublish 2023-10-01..2025-12-31 (P2_bp_gap24): 2025 MAE 1116 vs Meteologica 1215 (-8.2%; held-out days
+  1057 vs 1174, -10.0%, gain 117 +- 29 MW, 60% of days won). Pre-2025 1049 vs 1148. 80% band coverage 91%.
+  Gain in winter/spring/autumn and every hour block; summer equal (1483 vs 1480). Meteologica's monthly biases up
+  to ~1 GW (Jan -986, Sep +901) shrink to <= 0.4 GW. Hourly error correlation 0.84.
+
+**Energy: v0_customload_b** = v0 with pjm_load replaced by the P2 q500 from 2023-10-01 on, plus thermal_stress,
+solarduckcurve and its lead1 diff recomputed (formulas checked exact). Baseline settings (est8, 10k context, daily).
+- 2025 MAE 4.688 vs baseline 4.672 (gain -0.016 +- 0.043); held-out 4.641 vs 4.608 (-0.033 +- 0.055), 51% days
+  won. No measurable price gain. 10 worst baseline days: 5 better, 5 worse, not tracking the load error.
+- Load-only variant (v0_customload_a) skipped at the user's request.
+- Conclusion: the better load forecast doesn't help the price model; ~100 MW on ~100 GW is noise to it, and there
+  is no gain in summer, where load drives spikes.

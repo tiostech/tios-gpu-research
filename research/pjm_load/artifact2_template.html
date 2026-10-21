@@ -144,7 +144,7 @@ tr.grp td { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; c
         <button type="button" id="eres-d" aria-pressed="false">Daily average</button>
       </div>
     </div>
-    <p class="sub">$/MWh. The production forecast and the load-only variant are hidden to start with; click their legend entries to show them.</p>
+    <p class="sub">$/MWh. The production forecast is hidden to start with; click its legend entry to show it.</p>
     <div id="c-ets" class="plot"></div>
   </section>
 
@@ -196,7 +196,7 @@ const gainE = EN.hold[BEST];
 
 // ---------- narrative (numbers from the data; wording reviewed against the results)
 $("lede").innerHTML = `<p>Two questions for 2025. <b>A.</b> Can Kumo-Tabular forecast PJM's total hourly load better than Meteologica, the vendor forecast the production price model uses? <b>B.</b> If that better load forecast replaces Meteologica's in the Kumo price model, does the price forecast improve?</p>
-<p><b>A: yes.</b> With Meteologica's own forecast among its inputs, Kumo cut the load error by ${f1(LD.hold.kumo.pct_mae)}% on held-out days and removed almost all of Meteologica's under-forecast. <b>B: ${Math.abs(gainE.gain) < 2 * gainE.se ? "not measurably" : gainE.gain > 0 ? "a little" : "no"}.</b> __ENERGY_LEDE__</p>`;
+<p><b>A: yes.</b> With Meteologica's own forecast among its inputs, Kumo cut the load error by ${f1(LD.hold.kumo.pct_mae)}% on held-out days and shrank Meteologica's month-long biases (largest ${f1(Math.max(...D.load_bias.met.map(Math.abs)) / 1000)} GW) to at most ${f1(Math.max(...D.load_bias.kumo.map(Math.abs)) / 1000)} GW. <b>B: ${Math.abs(gainE.gain) < 2 * gainE.se ? "not measurably" : gainE.gain > 0 ? "a little" : "no"}.</b> Swapping in Kumo's load forecast, and recomputing the three production features built from load, left the price error where it was: the daily MAE gain is ${sg(gainE.gain, f3)} &plusmn; ${f3(gainE.se)} $/MWh on held-out days, and the new model had the lower error on ${pc(gainE.win)} of days, a coin flip. Both Kumo price models still beat production by about $${f2(EN.hold.prod.mae - EN.hold.base.mae)}/MWh.</p>`;
 
 // ---------- load scorecard
 $("lfigs").innerHTML = [
@@ -218,7 +218,7 @@ for (const [k, lab] of [["hold", `Held-out days (${LD.hold.days})`], ["all", `Fu
 $("lscore").innerHTML = h + "</tbody>";
 
 const BP = D.bp;
-$("lnote").innerHTML = `<p>__LOAD_NOTE__</p>
+$("lnote").innerHTML = `<p>The gain comes from winter, spring and autumn and shows up in every hour block. In summer, when load matters most for prices, Kumo is no better than Meteologica (${f0(D.load_brk.season[2].kumo)} vs ${f0(D.load_brk.season[2].met)} MW). The two forecasts also miss together most of the time: the correlation of their hourly errors is ${f2(D.chg.load_err_corr)}.</p>
 <p>The same replay before 2025 (${BP.start} to 2024-12-31, the period that feeds the price model's context) gives Kumo ${f0(BP.pre_kumo_mae)} MW vs Meteologica ${f0(BP.pre_met_mae)} MW, so the 2025 result is not a one-year fluke. Kumo's 10%&ndash;90% band contained the actual load in ${pc(D.load_cov80)} of 2025 hours.</p>`;
 
 const SC = D.screen;
@@ -233,7 +233,7 @@ $("efigs").innerHTML = [
   [`${f3(EN.hold.base.mae)} &rarr; ${f3(EN.hold[BEST].mae)}`, "price MAE on held-out days, $/MWh", "--cl"],
   [`${sg(gainE.gain, f3)} &plusmn; ${f3(gainE.se)}`, "daily MAE gain, $/MWh (positive = better)", "--cl"],
   [pc(gainE.win), "of held-out days where the custom-load model's price error was lower", "--cl"],
-].map(([b, l, c]) => `<div class="fig" style="--fc:var(${c})"><span class="big">${b}</span><span class="lbl">${l}</span></div>`).join("");
+].map(r => gainE.gain > 2 * gainE.se ? r : [r[0], r[1], "--prod"]).map(([b, l, c]) => `<div class="fig" style="--fc:var(${c})"><span class="big">${b}</span><span class="lbl">${l}</span></div>`).join("");
 const ecolsP = [...ecols, "prod"];
 h = `<thead><tr><th></th>${ecolsP.map(c => `<th class="n"><span class="key" style="background:var(${ECOL[c]})"></span>${ENAME[c]}</th>`).join("")}</tr></thead><tbody>`;
 for (const [k, lab] of [["hold", `Held-out days (${EN.hold.days})`], ["all", `Full 2025 (${EN.all.days} days)`]]) {
@@ -246,7 +246,7 @@ for (const [k, lab] of [["hold", `Held-out days (${EN.hold.days})`], ["all", `Fu
 }
 h += `<tr class="grp"><td colspan="${ecolsP.length + 1}">Full 2025 without the 10 worst baseline days</td></tr><tr><td>MAE</td>${ecolsP.map(c => `<td class="n">${EN.excl_top10[c] === undefined ? "&ndash;" : f3(EN.excl_top10[c])}</td>`).join("")}</tr>`;
 $("escore").innerHTML = h + "</tbody>";
-$("enote").innerHTML = `__ENERGY_NOTE__`;
+$("enote").innerHTML = `<p>Why a better load forecast doesn't give a better price forecast here:</p><ul><li><b>The improvement is small next to what moves prices.</b> Kumo's load error is about ${f0(LD.all.met.mae - LD.all.kumo.mae)} MW lower on a system averaging roughly 100 GW (MAPE ${f2(LD.all.met.mape)}% &rarr; ${f2(LD.all.kumo.mape)}%). The two forecasts differ by ${f0(D.chg.load_abs_change_2025)} MW an hour on average, mostly in both directions, and the price model sees that as noise rather than news.</li><li><b>No gain in summer.</b> Summer peaks are where load drives price spikes, and that is the one season where Kumo's load is no better.</li><li><b>Load is one input among many.</b> The price model already has the regional Meteologica loads, weather, wind, solar, outages and recent prices. The leftover load error explains little of its price error.</li></ul><p>On this evidence there is no reason to change the price model's load input. The load forecast itself is still the better load forecast, and is worth using wherever load is the quantity that matters.</p>`;
 
 $("spike").innerHTML = `<thead><tr><th>Day</th><th class="n">Peak price</th>${ecols.map(c => `<th class="n">${ENAME[c].replace("Kumo baseline (Meteologica load)", "Baseline")} MAE</th>`).join("")}<th class="n">Load MAE Meteologica</th><th class="n">Load MAE Kumo</th></tr></thead><tbody>` +
   D.spike.map(r => {
@@ -254,7 +254,7 @@ $("spike").innerHTML = `<thead><tr><th>Day</th><th class="n">Peak price</th>${ec
     const bestc = ecols.reduce((a, c) => r[c] < r[a] ? c : a, ecols[0]);
     return `<tr><td>${lab}</td><td class="n">${f0(r.ymax)}</td>${ecols.map(c => `<td class="n ${c === bestc ? "win" : ""}">${f2(r[c])}</td>`).join("")}<td class="n">${f0(r.load_met)}</td><td class="n ${r.load_kumo < r.load_met ? "win" : ""}">${f0(r.load_kumo)}</td></tr>`;
   }).join("") + "</tbody>";
-$("spike-note").innerHTML = `__SPIKE_NOTE__`;
+$("spike-note").innerHTML = `On the ten worst baseline days, the custom-load model is better on 5 and worse on 5, and the price result doesn't follow the load result. On 24 Jun Kumo's load was worse (2,137 vs 1,480 MW) but its price error was smaller; on 20 Jan its load was better (1,336 vs 1,897 MW) but its price error was larger. At this size, the load change acts as noise in the price model, not as signal.`;
 
 // ---------- specs and method
 const specs = [
@@ -263,7 +263,6 @@ const specs = [
   ["--muted", "Kumo load P0", "P0_weather", "PJM ALL load, MW", "Kumo-Tabular (large), in-context, no fitting", "Last 10,000 hours ending D&minus;2", "Daily", "78: config-weighted feels-like (= production's feelslike_weightedavg) with lags, rolling and daily stats, CDD/HDD; feels-like for 18 cities; temperature, dew point, cloud cover for 8 large cities; wind; calendar, holidays, daylight; actual load lags of 48h+", "D&minus;1 10:30 EPT; context gap 24 h", "8 / 0", "Every 3rd day of 2025"],
   ["--kumo", "Kumo load P2", "P2_with_meteo (used)", "PJM ALL load, MW", "Kumo-Tabular (large), in-context, no fitting", "Last 10,000 hours ending D&minus;2", "Daily, replayed Oct 2023 &ndash; Dec 2025", "89: P0 + Meteologica forecasts for MIDATL, SOUTH, WEST, ComEd, AEP, Dominion, ATSI, PSEG + Meteologica ALL (level, daily shape, change vs yesterday)", "D&minus;1 10:30 EPT; context gap 24 h", "8 / 0", "2025 (pre-2025 replay feeds the price context)"],
   ["--kumo", "Kumo price baseline", "baseline_v0_daily", "PJM DA system energy price", "Kumo-Tabular (large)", "Last 10,000 hours", "Daily", "21 columns: production's 17 inputs (load = Meteologica ALL) + smoothed gas, date, hour, date counter", "D&minus;1 10:30 EPT", "8 / 0", "2025"],
-  ["--cla", "+ Kumo load only", "v0_customload_a", "Same", "Same", "Same", "Daily", "Baseline with pjm_load = Kumo load P2 (Oct 2023 onward)", "Same", "8 / 0", "2025"],
   ["--cl", "+ Kumo load and load-based features", "v0_customload_b", "Same", "Same", "Same", "Daily", "As above, and thermal stress, solar duck curve and its hourly change recomputed from the Kumo load with production's formulas", "Same", "8 / 0", "2025"],
 ];
 $("specs").innerHTML = specs.map(r => `<tr><td><span class="key" style="background:var(${r[0]})"></span>${r[1]}<span class="code">${r[2]}</span></td>${r.slice(3).map(x => `<td>${x}</td>`).join("")}</tr>`).join("");
