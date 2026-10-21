@@ -1,6 +1,6 @@
 """Compare OKGE load walk-forward runs with the Meteologica OKGE forecast on 2025.
 
-  uv run python research/spp_load/compare.py <run_dir> [<run_dir> ...]
+  uv run python research/spp_load/compare.py [--bench data/spp_load/meteologica_all.parquet] <run_dir> ...
 
 Meteologica = data/spp_load/meteologica_okge.parquet (single D-1 ~09:20 vintage). HOLD = days whose
 day number is not a multiple of 3 (as in the price work); blend weights are picked on SCREEN days.
@@ -13,9 +13,13 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
-met = pd.read_parquet(ROOT / "data/spp_load/meteologica_okge.parquet").set_index("ts")["meteologica"]
+argv = sys.argv[1:]
+bench = ROOT / "data/spp_load/meteologica_okge.parquet"
+if argv and argv[0] == "--bench":
+    bench, argv = Path(argv[1]), argv[2:]
+met = pd.read_parquet(bench).set_index("ts")["meteologica"]
 runs = {}
-for d in map(Path, sys.argv[1:]):
+for d in map(Path, argv):
     p = pd.read_parquet(d / "val_walk_forward_predictions.parquet")
     p = p.assign(ts=pd.to_datetime(p["ts"])).set_index("ts")
     runs[d.name] = p
