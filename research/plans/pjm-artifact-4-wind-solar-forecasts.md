@@ -11,8 +11,11 @@ the user to open the tunnel) and roughly 5 h of GPU, run sequentially. **2025 on
 the vendor forecasts the production price model uses?
 (b) If the custom wind, solar **and** load forecasts all go into the Kumo energy model together, does the
 price forecast improve? Artifact 2 swapped in load alone and found nothing (HOLD -0.033 +- 0.055 $/MWh);
-this asks whether all three custom inputs together, plus their differences from Meteologica, add up to
-something.
+this asks whether all three custom inputs together, plus their differences from the **ISO** forecasts,
+add up to something. The ISO differences carry a market theory (from the user): PJM commits generation
+on its own forecasts, the market anticipates mis-commitment when those forecasts are wrong, and traders
+see better forecasts than the ISO's. So a better forecast minus the ISO's may predict the mis-commit, and
+the price effect, ahead of time.
 
 **Prior:** in 2025 wind averaged ~3.7 GW and solar ~2.7 GW (peak 11.6 GW) against ~90 GW of load, so
 better wind and solar forecasts move thermal stress by a few hundred MW at most. Expect a clear result on
@@ -35,6 +38,16 @@ artifact must say plainly if (b) is null.
 - Window: the 2025 energy walk-forward only reads the last 10,000 context rows, so every custom forecast
   is needed out of sample from **2023-10-01 to 2025-12-31**.
 - Custom load already exists: `outputs/pjm-load-fe/P2_bp_gap24` (that window exactly).
+- **ISO load forecast timing (decision needed before step 5):** `pjm_load_forecast` keeps one vintage
+  per hour, and on ~99% of days since 2019 it is stamped after the 10:30 EPT cutoff (typically ~10:47),
+  so the fair query returns nothing (Artifact 2 dropped it for this reason). ISO wind and solar forecasts
+  may behave the same way (step 1 measures it). The vintages stamped between 10:30 and 11:00 are public
+  before day-ahead bids close, so they fit the theory above. But they break the 10:30 rule that every
+  other input follows, which production uses so it has time to run. **Ask the user** whether the
+  ISO-difference columns may use the latest vintage stamped before **11:00 EPT** on D-1 (recommended:
+  the theory is about what bidders know at the close, and the 30-minute margin is an operational
+  choice, not a market fact). Flag it in the artifact's method note either way. If the answer is no, the
+  ISO-difference columns are missing wherever no 10:30 vintage exists, and the artifact says so.
 - Existing local data: `data/pjm_extra/scen_wind.parquet` (Meteologica scenario wind, ECMWF-ENS + GEFS,
   average / std / q5 / q50 / q95, fair D-1 vintages from 2018-04) and `scen_solar.parquet` (ECMWF-ENS,
   from 2021-07). `data/pjm_config.parquet` has the Meteologica regional wind (western / midatlantic /
@@ -51,7 +64,9 @@ artifact must say plainly if (b) is null.
      `forecast_time <= D-1 10:30 EPT`), plus any interval columns (`lower_80` / `upper_80`, as in the
      load table) and the scenario tables.
    - **ISO forecasts (required inputs):** PJM's own wind and solar forecasts, RTO and regional if
-     available. Use the same fair-vintage query. The ISO *load* forecast was usually stamped after
+     available, and the ISO load forecast (`pjm_load_forecast`, `RTO COMBINED`) for the difference
+     columns. Pull each twice: the latest vintage stamped by 10:30 EPT on D-1, and the latest stamped by
+     11:00 EPT, so the decision in Key facts can go either way without a re-pull. Default to the 10:30 query. The ISO *load* forecast was usually stamped after
      10:30, so this query may return an older vintage or nothing for some days. Measure coverage and
      staleness (hours between the vintage used and the cutoff) by year. Keep whatever fair values exist
      and leave the rest as missing. If fair coverage in 2023-10 .. 2025 is very low (say under half of
@@ -67,7 +82,8 @@ artifact must say plainly if (b) is null.
    - The actuals must measure the same thing the forecasts target: compare scale and 2025 bias for
      Meteologica and ISO. PJM metered solar excludes behind-the-meter solar. A persistent 10%+ gap means
      a definition mismatch that has to be resolved before going on.
-   - Report Meteologica's and ISO's 2025 MAE / nMAE for both targets as the benchmarks.
+   - Report Meteologica's and ISO's 2025 MAE / nMAE for both targets as the benchmarks, and the ISO load
+     forecast's 2025 MAE next to Meteologica's for context.
 3. **Features: vendor versions only** (`research/pjm_renew/make_features.py`; one dataset per target,
    `data/pjm-renew-fe/<target>/<variant>`, with `--val-start 2023-10-01` for the backpublish split).
    No weather-only variants.
@@ -107,9 +123,13 @@ artifact must say plainly if (b) is null.
      - hour-to-hour ramp error (`solar_lag1_diff` and the duck-curve change are ramps);
      - error in the top 10% thermal-stress hours, where prices spike.
 5. **Gate 3: perfect-foresight check** (one energy run, ~35 min). Build v0 with the 2023-10 .. 2025
-   load, wind and solar replaced by the *actuals*. Recompute every derived input, and add the three
-   difference columns as actual minus Meteologica. This mirrors step 6 exactly. Run the baseline
-   settings on 2025.
+   load, wind and solar replaced by the *actuals*. Recompute every derived input, and add six difference
+   columns, for load, wind and solar each:
+   - actual minus Meteologica (`*_actual_minus_met`);
+   - actual minus ISO (`*_actual_minus_iso`), with the ISO vintage rule from Key facts.
+
+   This contains everything step 6 uses (with the custom forecasts replaced by the truth), plus the
+   Meteologica errors. Run the baseline settings on 2025.
    - This leaks the future, so it is a diagnostic only, never a result. It bounds what any load / wind /
      solar forecast could do for this price model.
    - **If it gains less than 2 SE on held-out days,** skip step 6 and report the bound. Read it as a sign
@@ -120,9 +140,10 @@ artifact must say plainly if (b) is null.
    --wind <run> --solar <run> [--actuals]` (`--actuals` builds the step 5 dataset):
    - `pjm_load`, `pjm_wind` and `pjm_solar` are replaced by the custom q500s from 2023-10-01 on.
    - Every derived input above is recomputed: thermal stress, duck curve, duck-curve change, solar change.
-   - Three columns are added: `load_custom_minus_met`, `wind_custom_minus_met` and
-     `solar_custom_minus_met` (custom minus Meteologica), with the Meteologica value taken from v0. They
-     are left missing before 2023-10-01 (those rows never enter the 2025 context).
+   - Three columns are added: `load_custom_minus_iso`, `wind_custom_minus_iso` and
+     `solar_custom_minus_iso` (custom forecast minus the ISO forecast; the ISO vintage rule is in Key
+     facts). There are no custom-minus-Meteologica columns. They are left missing before 2023-10-01
+     (those rows never enter the 2025 context) and wherever no ISO vintage exists.
    - Each formula is verified on v0 first, and the script asserts that every replaced value came from a
      step whose context ended by D-2.
    - Run with exactly the baseline settings (est8, seed 0, 10k, daily 2025, no gap). Compare with the
@@ -155,10 +176,11 @@ that matches the ssh command itself.
 6. **Energy impact** (if step 6 ran): baseline vs `v0_custom_all` (and Artifact 2's load-only result)
    scorecard; spike-day table.
 7. **How it works:** flow from weather and vendor / ISO forecasts to the Kumo wind / solar / load models,
-   then to the custom inputs and the Kumo energy model; the walk-forward rule in one sentence; links to
-   Artifacts 1-3.
+   then to the custom inputs and the Kumo energy model; the walk-forward rule in one sentence; the
+   mis-commitment theory behind the custom-minus-ISO columns in two sentences; links to Artifacts 1-3.
 8. **Specs and method note:** one row per model (Meteologica wind / solar, ISO wind / solar with the
-   vintage used, Kumo W2 / S2, Kumo load P2, baseline, `v0_custom_all`, the perfect-foresight run):
+   vintage used, ISO load with the vintage used, Kumo W2 / S2, Kumo load P2, baseline,
+   `v0_custom_all`, the perfect-foresight run):
    target, method, context, cadence, inputs, cutoff, estimators / seed, scored period.
 
 ## Deliverables and bookkeeping
