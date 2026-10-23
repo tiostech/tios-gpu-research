@@ -13,6 +13,9 @@ log); for artifact 2 also `research/spp-load-kumo.md` (load lessons, incl. the l
   `row_number() over (partition by dt, hr[, key] order by forecast_time desc) = 1` with
   `forecast_time <= timestamp(date_sub(dt, interval 1 day), '10:30:00')` (see `research/pjm/collect_extra.R`).
   `forecast_time` is market-local (EPT). (SPP tables, by contrast, store one D-1 ~09:00 vintage.)
+  **Exception (user decision, 2026-10-23):** PJM ISO forecasts (`pjm_load_forecast`, ISO wind / solar) may
+  use vintages up to **D-1 11:00 EPT**, the day-ahead bid deadline (10:00 CT). The ISO load forecast is
+  usually stamped ~10:47 EPT, which is fair under this rule.
 - **Context leak for load targets:** walk-forward context must not contain D-1 actual load (unknown at the
   cutoff). Use `scripts/kumo_forecast.py --context-gap-hours 24`; actual-load features only as lags >= 48h.
   Price targets don't need the gap (D-1 DA prices publish on D-2).

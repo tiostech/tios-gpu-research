@@ -38,16 +38,13 @@ artifact must say plainly if (b) is null.
 - Window: the 2025 energy walk-forward only reads the last 10,000 context rows, so every custom forecast
   is needed out of sample from **2023-10-01 to 2025-12-31**.
 - Custom load already exists: `outputs/pjm-load-fe/P2_bp_gap24` (that window exactly).
-- **ISO load forecast timing (decision needed before step 5):** `pjm_load_forecast` keeps one vintage
-  per hour, and on ~99% of days since 2019 it is stamped after the 10:30 EPT cutoff (typically ~10:47),
-  so the fair query returns nothing (Artifact 2 dropped it for this reason). ISO wind and solar forecasts
-  may behave the same way (step 1 measures it). The vintages stamped between 10:30 and 11:00 are public
-  before day-ahead bids close, so they fit the theory above. But they break the 10:30 rule that every
-  other input follows, which production uses so it has time to run. **Ask the user** whether the
-  ISO-difference columns may use the latest vintage stamped before **11:00 EPT** on D-1 (recommended:
-  the theory is about what bidders know at the close, and the 30-minute margin is an operational
-  choice, not a market fact). Flag it in the artifact's method note either way. If the answer is no, the
-  ISO-difference columns are missing wherever no 10:30 vintage exists, and the artifact says so.
+- **ISO forecast cutoff: 11:00 EPT (user decision, 2026-10-23).** `pjm_load_forecast` keeps one vintage
+  per hour, usually stamped ~10:47 EPT on D-1 (`forecast_time` is Eastern). That is before PJM's
+  day-ahead bid deadline (11:00 EPT = 10:00 CT), so it is fair (Artifact 2 dropped it under the stricter
+  10:30 rule). For every ISO forecast (load, wind, solar; model inputs and difference columns) use the
+  latest vintage with `forecast_time <= timestamp(date_sub(dt, interval 1 day), '11:00:00')`.
+  Meteologica, Maxar and all other inputs keep the 10:30 rule. State both cutoffs in the artifact's
+  method note.
 - Existing local data: `data/pjm_extra/scen_wind.parquet` (Meteologica scenario wind, ECMWF-ENS + GEFS,
   average / std / q5 / q50 / q95, fair D-1 vintages from 2018-04) and `scen_solar.parquet` (ECMWF-ENS,
   from 2021-07). `data/pjm_config.parquet` has the Meteologica regional wind (western / midatlantic /
@@ -65,12 +62,10 @@ artifact must say plainly if (b) is null.
      load table) and the scenario tables.
    - **ISO forecasts (required inputs):** PJM's own wind and solar forecasts, RTO and regional if
      available, and the ISO load forecast (`pjm_load_forecast`, `RTO COMBINED`) for the difference
-     columns. Pull each twice: the latest vintage stamped by 10:30 EPT on D-1, and the latest stamped by
-     11:00 EPT, so the decision in Key facts can go either way without a re-pull. Default to the 10:30 query. The ISO *load* forecast was usually stamped after
-     10:30, so this query may return an older vintage or nothing for some days. Measure coverage and
-     staleness (hours between the vintage used and the cutoff) by year. Keep whatever fair values exist
-     and leave the rest as missing. If fair coverage in 2023-10 .. 2025 is very low (say under half of
-     days), tell the user before going on rather than dropping it.
+     columns. Use the 11:00 EPT fair-vintage query from Key facts. Measure coverage and staleness (hours
+     between the vintage used and the cutoff) by year, and leave days without a fair vintage as missing.
+     If fair coverage in 2023-10 .. 2025 is very low (say under half of days), tell the user before going
+     on rather than dropping it.
    - **Weather:** `pjm_maxar_weather_forecasts`. Look up `pjm_locations` for stations near the wind
      clusters (northern Illinois / ComEd, western Pennsylvania ridges, West Virginia, Ohio, Indiana) and
      the solar clusters (Virginia / Dominion, New Jersey, Maryland, Ohio, Pennsylvania). Pull
