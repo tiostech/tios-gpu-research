@@ -1,7 +1,7 @@
 # Shared context for the PJM Kumo stakeholder artifacts
 
-Written 2026-10-21 for fresh-context agents working on either
-`pjm-artifact-1-production-vs-kumo.md` or `pjm-artifact-2-load-forecast.md`.
+Written 2026-10-21 for fresh-context agents working on the `pjm-artifact-*.md` specs in this folder
+(1: production vs Kumo, 2: load forecast, 4: wind and solar forecasts).
 Read this file, then the artifact spec, then `research/pjm-kumo-feature-engineering.md` (PJM price
 log); for artifact 2 also `research/spp-load-kumo.md` (load lessons, incl. the leak).
 
@@ -53,3 +53,12 @@ log); for artifact 2 also `research/spp-load-kumo.md` (load lessons, incl. the l
 - Same result in other markets (2025, "original" Kumo = production RF features + time features):
   MISO 3.385 / 6.86 vs production 3.716 / 8.45; SPP 3.933 / 6.53 vs 4.446 / 7.29
   (`research/miso-kumo.md`, `research/spp-kumo.md`).
+- **Custom load forecast (Artifact 2, https://claude.ai/artifact/4TGPBZGrscdy1zawsqqoWM):** Kumo P2 (weather +
+  Meteologica inputs, `--context-gap-hours 24`) beats Meteologica ALL by 8% MAE in 2025 (10% on HOLD), but
+  swapping it into the energy model (`v0_customload_b`, derived inputs recomputed) gives no price gain
+  (HOLD -0.033 +- 0.055). Backpublish `.../pjm-load-fe/outputs/P2_bp_gap24/` (2023-10-01 .. 2025-12-31).
+  The user asked to build only the "with recomputed derived inputs" variant.
+- **2026 test set (Artifact 3, https://claude.ai/artifact/84nZyh3RiGz6Zq5KhFbcyv):** original baseline on
+  2026-01-01 .. 2026-10-08 (`.../pjm-fe/outputs/baseline_v0_test_daily/`; data = /scratch/data/pjm with
+  train = train + val, val = test): MAE 9.478 vs production 10.202, win 69%; the late-January cold snap
+  (prices to $1,501) is the one week production did better.
