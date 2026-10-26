@@ -404,3 +404,37 @@ Scored on 281 complete days (to 2026-10-08). First look at the test split; nothi
   on 28-29 Jan. Excluding that week (273 days): 8.36 -> 7.14 (-14.6%), gain +1.22 +- 0.25, win 70%.
 - Hour blocks: Kumo better 00-05/06-09/16-20, tie 21-23, slightly worse 10-15 (8.62 vs 8.46). 80% cov 0.86.
 - 2026 prices higher/more volatile (mean $64 vs $47), so both MAEs roughly double vs 2025.
+
+## Artifact 4: Kumo PJM wind / solar forecasts and the price model with all custom inputs (2026-10-23)
+Page: https://claude.ai/artifact/4GJv29JH9TMnqZpQAnS2T2 (private). Plan `research/plans/pjm-artifact-4-wind-solar-forecasts.md`.
+Scripts in `research/pjm_renew/` (collect.R, make_features.py, make_custominputs.py, score.py, artifact4_data.py,
+artifact4_template.html, queue.sh). Nothing run on 2026.
+
+**Data / Gate 1.** Targets pjm_windgen_outputs / pjm_solargen_outputs ALL (one row per hour, no revision history ->
+lags >= 48h only). ISO forecasts pjm_windgen_output_forecasts ALL (stamped 10:55 EPT), pjm_solargen_output_forecasts
+ALL + BTM_ALL (10:00), pjm_load_forecast RTO COMBINED (~10:47): one vintage per hour, all fair under the 11:00 EPT
+rule, 100% of 2023-10..2025 days. **Meteologica wind / solar tables also keep one vintage per hour, stamped
+10:23-10:59 EPT (after 10:30 on ~70% of 2023-25 hours); v0's pjm_wind / pjm_solar equal it on every hour.** Under the
+10:30 rule only ~20% of days had a value, so these use the 11:00 rule too (= what production feeds the price model).
+Scenario ensembles and Maxar keep 10:30. Scales match (2025 wind mean actual 3669 / Met 3669 / ISO 3707 MW; solar
+daylight Met -5%, ISO -2%). 2025 benchmarks: wind MAE Met 472 / ISO 499; load MAE Met 1215 / ISO 1547 / Kumo P2 1116.
+
+**Wind W2** (69 features: Met ALL + 3 regional + 8 zonal, ISO, ECMWF-ENS/GEFS scenarios, Met recent error, Maxar
+wind speed + capped cube at 13 stations, calendar, lags >= 48h, 30-day max capacity proxy). Screen (122 sel days)
+478.7 vs Met 485.5. Backpublish W2_bp_gap24 (2023-10-01..2025-12-31): 2025 ALL 468.7 vs Met 472.0 / ISO 499.2
+(gain vs Met +3.4 +- 5.0, win 50%); HOLD 463.6 vs 465.3 (+1.7 +- 6.1) -> **tie with Meteologica**; beats ISO
++38 +- 9. Pre-2025 450.5 vs 452.7. Ramps and top-10% stress hours tied. Cov80 0.88.
+**Solar S2** (67 features: Met ALL + 3 regional, ISO ALL + BTM, ECMWF-ENS scenario, Met recent error, sun elevation
+/ clear-sky at 4 centroids, Maxar sky cover / temp at 14 stations, calendar, lags, same-hour 30-day max; q clipped
+at 0; scored on daylight hours = sun up at any centroid). Screen 453.8 vs Met 506.4. Backpublish S2_bp_gap24:
+2025 ALL 461.3 vs Met 530.5 / ISO 687.7 (-13.0%, +66 +- 11, win 61%); **HOLD 465.1 vs 542.6 (-14.3%, +74 +- 13)**;
+pre-2025 286 vs 369 (-22%). Mostly bias: Met +248 MW low on avg daylight hour, Kumo +33. Ramp error 147 vs 166,
+stress hours 450 vs 517. Cov80 0.86.
+
+**Gate 3 perfect foresight: v0_actuals_all** (v0 with actual load / wind / solar from 2023-10-01, thermal stress,
+duck curve, its change and solar_lag1_diff recomputed (all formulas exact on v0), + 6 cols actual minus Met / ISO).
+Baseline settings. 2025 ALL 4.635 / 9.32 vs 4.672 / 9.49 (gain +0.038 +- 0.050, win 49%); **HOLD 4.606 / 9.18 vs
+4.608 / 9.35 (+0.002 +- 0.064, win 47%) -> below 2 SE, so step 6 (v0_custom_all) was skipped** per the plan.
+Reading: the DA price already reflects load / wind / solar about as well as perfect knowledge would; better forecasts
+of these (and the custom-minus-ISO mis-commitment columns) cannot help this price model. Run order: the perfect-
+foresight run was moved ahead of the backpublishes at the user's request (W2_bp restarted).
