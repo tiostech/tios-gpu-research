@@ -8,6 +8,7 @@ Labels: spike = RT >= 150; premium = RT - DA >= 75 (RT the DA market did not pri
 Each feature is scored by AUC within strata, so what the strata explain does not count:
   band  = 5 GW actual-net-load band x season (removes the net-load level)
   +nre  = band x tercile of the 3-hour net-load ramp error vs ISO (removes the net-load ramp miss too)
+  +head = band x tercile of available-capacity headroom (does a fuel breakdown add beyond total headroom?)
 95% intervals from a day-block bootstrap (resample days); "H1 / H2" = the same AUC on Jan-Jun and Jul-Dec separately,
 a check that the effect is not one episode. Sign convention: error = actual - forecast. A negative renewable ramp
 error = renewables fell faster (or rose slower) than forecast.
@@ -88,6 +89,19 @@ F["net_imports"] = act["load"] - gen.sum(axis=1)
 F["net_imports_vs_d2"] = F["net_imports"] - F["net_imports"].shift(48)
 F["hydro_gen"] = gen["Hydro"]
 F["SYMPTOM_gas_gen"] = gen["Gas"]
+# supply-stack slack from PJM data only (not IIR): a fuel's practical capacity = its highest hourly output over the
+# previous 30 days (tracks retirements and long outages); spare = that minus current output
+gl = pd.read_parquet(ROOT / "data/pjm_rt/gen_by_fuel.parquet")
+gl = gl.assign(ts=ts_of(gl)).pivot_table(index="ts", columns="fuel_type", values="power_mw", aggfunc="mean")
+for fu, nm in (("Gas", "gas"), ("Coal", "coal"), ("Oil", "oil"), ("Hydro", "hydro"), ("Nuclear", "nuclear")):
+    cap30 = gl[fu].shift(1).rolling(720, min_periods=600).max()
+    F[f"spare_{nm}"] = (cap30 - gl[fu]).reindex(idx)
+F["spare_thermal"] = F[["spare_gas", "spare_coal", "spare_oil"]].sum(axis=1, min_count=3)
+F["spare_gas_pct"] = F["spare_gas"] / (gl["Gas"].shift(1).rolling(720, min_periods=600).max()).reindex(idx)
+F["system_slack"] = cap["economic_max"] - gen.sum(axis=1)
+og = pd.read_parquet(ROOT / "data/pjm_rt/outages_all.parquet")
+og = og.assign(ts=ts_of(og)).groupby("ts")[["forced_outages_mw", "capacity_on_outage_mw"]].mean().reindex(idx)
+F["pjm_forced_outages_fc"] = og["forced_outages_mw"]
 F["SYMPTOM_oil_gen"] = gen["Oil"]
 F["SYMPTOM_reg_price"] = hourly("regulation.parquet", "market_clear_price")
 F["gen_on_outage_fc"] = v0["pjm_gen_on_outage"]
@@ -96,6 +110,8 @@ ok = rt.notna() & act["net"].notna()
 seas = pd.Series(np.select([idx.month.isin([6, 7, 8]), idx.month.isin([12, 1, 2])], ["S", "W"], "X"), idx)
 band = (act["net"] // 5000).astype("Int64").astype(str) + seas
 nre = pd.qcut(F["net_ramp3_err_iso"], 3, labels=False).astype("Int64").astype(str)
+# third control: also hold total headroom (available capacity - load) fixed, in terciles
+headq = pd.qcut(F["headroom_econ"], 3, labels=False).astype("Int64").astype(str)
 labels = {"spike": rt >= 150, "premium": (rt - da) >= 75}
 day_code = pd.Series(pd.factorize(day)[0], idx)
 half = pd.Series(np.where(idx.month <= 6, "H1", "H2"), idx)
@@ -146,7 +162,7 @@ rows = []
 for ln, lab in labels.items():
     m = ok if ln == "premium" else ok & (act["net"] >= act["net"][lab & ok].quantile(0.1))
     print(f"{ln}: {int(lab[m].sum())} positive hours on {day[m & lab].nunique()} days, of {int(m.sum())}")
-    for sn, strat in (("band", band), ("band+nre", band + "_" + nre)):
+    for sn, strat in (("band", band), ("band+nre", band + "_" + nre), ("band+head", band + "_" + headq)):
         for c in F:
             a, lo, hi, h1, h2 = score(c, lab, strat, m)
             rows.append({"label": ln, "strata": sn, "feature": c, "auc": a, "lo": lo, "hi": hi, "H1": h1, "H2": h2,

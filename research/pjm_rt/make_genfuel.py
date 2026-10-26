@@ -10,6 +10,10 @@ reaches before ~2023-11) and missing before. Wind and solar are left out: their 
                      Upper bound, partly circular: gas and oil output respond to the RT price itself.
   v0_supply_pf_rt    v0_rt + actual gen_nuclear and net_imports only: supply-side shocks (nuclear trips, neighbours)
                      that are mostly not PJM's own dispatch response, so closer to what a forecast could deliver.
+  v0_stack_pf_rt     v0_rt + supply-stack slack, PJM data only (IIR is too stale / imprecise): spare_{gas, coal, oil,
+                     hydro, nuclear} = the fuel's highest hourly output over the previous 30 days (practical capacity)
+                     minus its actual output; system_slack = available capacity (day_gen_capacity economic max) minus
+                     total generation; forced_outages_fc = PJM's forced-outage report (published D-1 06:00, known).
 """
 
 import sys
@@ -34,9 +38,21 @@ cols = pd.DataFrame({
     "gen_other": p["Multiple Fuels"] + p["Other Renewables"] + p["Storage"],
     "net_imports": L.reindex(p.index) - p.sum(axis=1),
 })
-SETS = {"v0_genfuel_pf_rt": list(cols), "v0_supply_pf_rt": ["gen_nuclear", "net_imports"]}
+for fu, nm in (("Gas", "gas"), ("Coal", "coal"), ("Oil", "oil"), ("Hydro", "hydro"), ("Nuclear", "nuclear")):
+    cols[f"spare_{nm}"] = p[fu].shift(1).rolling(720, min_periods=600).max() - p[fu]
+gc = pd.read_parquet(DATA / "pjm_rt/gen_cap.parquet")
+cols["system_slack"] = gc.assign(ts=ts_of(gc)).groupby("ts")["economic_max"].mean().reindex(p.index) - p.sum(axis=1)
+og = pd.read_parquet(DATA / "pjm_rt/outages_all.parquet")
+cols["forced_outages_fc"] = og.assign(ts=ts_of(og)).groupby("ts")["forced_outages_mw"].mean().reindex(p.index)
+SETS = {"v0_genfuel_pf_rt": ["gen_gas", "gen_coal", "gen_nuclear", "gen_oil", "gen_hydro", "gen_other", "net_imports"],
+        "v0_supply_pf_rt": ["gen_nuclear", "net_imports"],
+        "v0_stack_pf_rt": ["spare_gas", "spare_coal", "spare_oil", "spare_hydro", "spare_nuclear", "system_slack", "forced_outages_fc"]}
 
+import sys as _s
+only = _s.argv[1:]
 for name, use in SETS.items():
+    if only and name not in only:
+        continue
     dst = DATA / "pjm-fe" / name
     dst.mkdir(parents=True, exist_ok=True)
     for s in ("train", "val", "test"):
