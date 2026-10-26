@@ -81,6 +81,13 @@ F["iir_starting_outs_mw"] = hourly("iir_offline.parquet", "startingouts_offline_
 gen = pd.read_parquet(ROOT / "data/pjm_rt/gen_by_fuel.parquet")
 gen = gen.assign(ts=ts_of(gen)).pivot_table(index="ts", columns="fuel_type", values="power_mw", aggfunc="mean").reindex(idx)
 F["gas_gen_ramp3"] = gen["Gas"].diff(3)
+F["nuclear_gen"] = gen["Nuclear"]
+F["nuclear_vs_d2"] = gen["Nuclear"] - gen["Nuclear"].shift(48)          # nuclear lost since D-2 (trips, derates)
+F["coal_gen"] = gen["Coal"]
+F["net_imports"] = act["load"] - gen.sum(axis=1)
+F["net_imports_vs_d2"] = F["net_imports"] - F["net_imports"].shift(48)
+F["hydro_gen"] = gen["Hydro"]
+F["SYMPTOM_gas_gen"] = gen["Gas"]
 F["SYMPTOM_oil_gen"] = gen["Oil"]
 F["SYMPTOM_reg_price"] = hourly("regulation.parquet", "market_clear_price")
 F["gen_on_outage_fc"] = v0["pjm_gen_on_outage"]
