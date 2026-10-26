@@ -464,3 +464,38 @@ Everything scored on 2025 RT; HOLD = 243 days; paired day-block bootstrap.
   headroom exists. Kumo's load / wind / solar are not different enough from Meteologica's, or not right often
   enough, to capture it.
 - For scale: actual DA misses RT by 13.33 MAE in 2025 (corr 0.64; RT max 1838 vs DA max 537).
+
+## RT spikes / Artifact 6: what perfect foresight says about forecasting RT spikes (2026-10-26)
+
+Page: https://claude.ai/artifact/PmQm34a6J7YqZcGZPZUrRV (`research/pjm_rt/artifact6_data.py` + `artifact6_template.html`).
+Code: `spikes.py` (model behaviour on spikes, conditions), `spikes_ramp.py` (within-net-load-band AUC tests with
+day-block CIs, H1/H2 stability), `make_headroom.py`, `make_custominputs.py --only / --errors-only`.
+New SQL pulls in data/pjm_rt/: pjm_hourly_generation_by_types, pjm_gen_capacities (Data Miner day_gen_capacity),
+pjm_iir_outage_total_summaries, pjm_hourly_regulation_reserves. Tie flows / 5-min load / intraday forecasts are
+stored only from 2026-10-23, so unusable for 2025.
+
+Ablations (RT target, HOLD gain vs v0_rt_daily, daily MAE):
+
+| run | MAE | spike-hr MAE | gain |
+|---|---|---|---|
+| v0_rt_daily | 12.283 | 153.3 | -- |
+| v0_actuals_all_rt (all actual) | 11.340 | 142.4 | +0.943 +- 0.181 |
+| v0_pf_errs_rt (Met levels + actual-minus cols) | 11.537 | 147.7 | +0.746 +- 0.167 |
+| v0_pf_load_rt | 11.588 | 143.9 | +0.695 +- 0.160 (best RMSE 34.91) |
+| v0_pf_solar_rt | 12.067 | 147.1 | +0.216 +- 0.062 |
+| v0_pf_wind_rt | 12.240 | 156.1 | +0.043 +- 0.082 |
+| v0_head_rt (D-2 headroom, usable) | 12.540 | 162.2 | -0.257 +- 0.144 |
+| v0_headpf_rt (actual headroom) | 12.007 | 159.6 | +0.276 +- 0.270 (ALL +0.53 +- 0.20) |
+
+- Load ~74% of the ceiling, solar ~23%, wind nothing; load + solar ~ additive.
+- Spikes (RT >= 150, 177 h / 70 d): models rank them at AUC 0.93-0.95 but median ~$119-125 vs RT $265; q950 >= 150
+  on ~90%. Only 17 spike hours lack net-load analogues in context; 135 have 100+ and RT usually did not spike there.
+- Median vs mean: mean worse on MAE (rt_base -3.67 +- 0.54) and not better on RMSE; helps spike hours only. On the
+  mean, Kumo conditions do help (+0.52 +- 0.16).
+- Within 5 GW net-load band x season: low available-capacity headroom AUC ~0.69-0.70 (both labels, stable,
+  survives net-ramp control); load / net-load ramp miss vs ISO ~0.60-0.67; for RT-DA >= 75 spikes, solar falling
+  faster than Meteologica 0.63 [0.57, 0.69], survives net-ramp control. Renewable "above then below" swing: not
+  supported.
+- day_gen_capacity posts daily for the previous day (10:00 download held data through D-1 HE24 only), so usable
+  headroom is D-2; the D-1-morning version was caught before running. D-2 proxy: spike-day AUC 0.75 alone but no
+  gain in the model.

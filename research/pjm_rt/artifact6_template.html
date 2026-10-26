@@ -1,0 +1,341 @@
+<title>PJM RT Spike Drivers</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/3.1.0/plotly-basic.min.js"></script>
+<style>
+/* Layout: single reading column in the house style of the PJM pages (Artifacts 1-5): answers, ablations, why
+   spikes are missed, median vs mean, spike conditions, headroom, hourly chart, next steps, method. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --fg: #1b2230; --muted: #5d6676; --rule: #dde1e8;
+  --actual: #1b2230; --met: #b5562a; --iso: #7a5aa6; --kumo: #1f6f8b; --da: #b5562a; --rt: #1f6f8b; --cu: #2e7d4f; --pf: #8a6d2f; --prod: #9aa1ad;
+  --good: #2e7d4f; --bad: #a33a2b;
+  --display: "Fraunces", Georgia, serif; --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --panel: #1a2029; --fg: #e4e8ee; --muted: #9aa3b1; --rule: #2c3440;
+  --actual: #e4e8ee; --met: #e58a5c; --iso: #b39ddb; --kumo: #5fb3cf; --da: #e58a5c; --rt: #5fb3cf; --cu: #6cc48f; --pf: #d0ad62; --prod: #6b7380;
+  --good: #6cc48f; --bad: #e57b6b; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1a2029; --fg: #e4e8ee; --muted: #9aa3b1; --rule: #2c3440;
+  --actual: #e4e8ee; --met: #e58a5c; --iso: #b39ddb; --kumo: #5fb3cf; --da: #e58a5c; --rt: #5fb3cf; --cu: #6cc48f; --pf: #d0ad62; --prod: #6b7380;
+  --good: #6cc48f; --bad: #e57b6b; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1000px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 56px; display: grid; gap: 28px; }
+h1 { font-family: var(--display); font-weight: 600; font-size: 31px; line-height: 1.15; margin: 0; text-wrap: balance; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; font-weight: 600; }
+h3 { margin: 0; font-size: 16px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+a { color: var(--kumo); }
+.lede { color: var(--muted); display: grid; gap: 8px; }
+.lede b { color: var(--fg); }
+.part { font-family: var(--display); font-size: 22px; font-weight: 600; margin: 8px 0 -8px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 20px; min-width: 0; display: grid; gap: 16px; }
+.stack { display: grid; gap: 8px; }
+.sub { color: var(--muted); font-size: 13px; }
+.num, td.n, th.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 640px) { .figs { grid-template-columns: 1fr; } }
+.fig { border-top: 2px solid var(--fc, var(--kumo)); padding-top: 10px; display: grid; gap: 2px; }
+.fig .big { font-family: var(--display); font-size: 30px; line-height: 1.1; color: var(--fc, var(--kumo)); }
+.fig .lbl { font-size: 13px; color: var(--muted); }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+tr.grp td { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding-top: 14px; border-bottom: 0; font-weight: 600; }
+.win { color: var(--good); font-weight: 500; }
+.lose { color: var(--bad); }
+.key { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+.two > div { min-width: 0; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 5px 12px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--kumo); color: var(--panel); }
+.seg button:focus-visible { outline: 2px solid var(--kumo); outline-offset: -2px; }
+.bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.ctrls { display: flex; flex-wrap: wrap; gap: 8px; }
+.prose { display: grid; gap: 12px; }
+.prose ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 72ch; }
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.flow .box { flex: 1 1 150px; min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; align-content: start; }
+.flow .box b { font-size: 14px; }
+.flow .box span { font-size: 12.5px; color: var(--muted); }
+.flow .box.k { border-color: var(--kumo); }
+.flow .arr { align-self: center; color: var(--muted); font-size: 18px; }
+@media (max-width: 640px) { .flow { flex-direction: column; } .flow .arr { transform: rotate(90deg); align-self: center; } }
+.specs td { font-size: 13.5px; }
+.specs td:first-child { font-weight: 600; white-space: nowrap; }
+.specs .code { font-family: var(--mono); font-size: 12px; color: var(--muted); font-weight: 400; display: block; }
+.small { color: var(--muted); font-size: 13px; display: grid; gap: 8px; }
+.small p { max-width: none; }
+.plot { width: 100%; min-width: 0; }
+</style>
+
+<div class="wrap">
+  <header class="stack">
+
+<div class="wrap">
+  <header class="stack">
+    <h1>What would it take to forecast PJM real-time price spikes?</h1>
+    <div class="lede" id="lede"></div>
+  </header>
+
+  <div class="figs" id="figs"></div>
+
+  <section class="panel" aria-labelledby="h-abl">
+    <div class="stack">
+      <h2 id="h-abl">Which part of perfect foresight helps</h2>
+      <h3>The RT model given one actual input at a time, scored on 2025 RT</h3>
+      <p class="sub">Gain = the RT-trained model's daily MAE minus this model's, averaged over the held-out days, with a bar of &plusmn; two bootstrap standard errors. A bar clear of zero is a real gain. Runs given actuals see the future and are ceilings, not forecasts.</p>
+    </div>
+    <div id="c-abl" class="plot" role="img" aria-label="Gain over the RT-trained model for each perfect-foresight ablation"></div>
+    <div class="tbl"><table id="abl"></table></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-why">
+    <div class="stack">
+      <h2 id="h-why">Why spikes stay missed</h2>
+      <h3>The models know when; the median does not say how much</h3>
+    </div>
+    <div class="two">
+      <div class="stack">
+        <p class="sub" id="why-note"></p>
+        <div class="tbl"><table id="why"></table></div>
+      </div>
+      <div class="stack">
+        <p class="sub" id="an-note"></p>
+        <div class="tbl"><table id="an"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-mm">
+    <div class="stack">
+      <h2 id="h-mm">Median or mean as the forecast</h2>
+      <p class="sub" id="mm-note"></p>
+    </div>
+    <div class="tbl"><table id="mm"></table></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-ft">
+    <div class="stack">
+      <h2 id="h-ft">What separates spike hours at the same net load</h2>
+      <h3>Realised conditions, each tested against hours with the same actual net load and season</h3>
+      <p class="sub" id="ft-note"></p>
+    </div>
+    <div class="bar">
+      <div class="ctrls">
+        <div class="seg" role="group" aria-label="Spike definition">
+          <button id="lab-premium" aria-pressed="true">RT &minus; DA &ge; $75</button><button id="lab-spike" aria-pressed="false">RT &ge; $150</button>
+        </div>
+        <div class="seg" role="group" aria-label="Controls">
+          <button id="st-band" aria-pressed="true">Same net load</button><button id="st-band+nre" aria-pressed="false">+ same net-load ramp miss</button>
+        </div>
+      </div>
+    </div>
+    <div id="c-ft" class="plot" role="img" aria-label="Within-band AUC with 95% interval for each realised condition"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-hp">
+    <div class="stack">
+      <h2 id="h-hp">Capacity headroom</h2>
+      <h3>A strong spike signal on its own that the price model does not use</h3>
+      <p class="sub" id="hp-note"></p>
+    </div>
+    <div class="two">
+      <div class="tbl"><table id="hpq"></table></div>
+      <div class="tbl"><table id="hpm"></table></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-ts">
+    <div class="bar">
+      <div class="stack">
+        <h2 id="h-ts">Hour by hour</h2>
+        <p class="sub">$/MWh. Opens on the June heat wave. The shaded band runs up to the perfect-foresight model's 95th percentile. Click a legend entry to show or hide a line.</p>
+      </div>
+    </div>
+    <div id="c-ts" class="plot" role="img" aria-label="Hourly RT price with model forecasts, 2025"></div>
+  </section>
+
+  <section class="panel prose" aria-labelledby="h-next">
+    <h2 id="h-next">What to forecast better</h2>
+    <ul id="next"></ul>
+  </section>
+
+  <section class="small" aria-labelledby="h-method">
+    <h2 id="h-method">Method note</h2>
+    <div id="method" class="small"></div>
+  </section>
+</div>
+
+<script>
+const D = __DATA__;
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const f0 = v => Math.round(v).toLocaleString(), f1 = v => v.toFixed(1), f2 = v => v.toFixed(2), f3 = v => v.toFixed(3);
+const pc = v => Math.round(v * 100) + "%", sg = (v, f) => (v >= 0 ? "+" : "&minus;") + f(Math.abs(v));
+const sig = g => g && g.gain > 2 * g.se, neg = g => g && g.gain < -2 * g.se;
+const gtxt = g => `${sg(g.gain, f2)} &plusmn; ${f2(g.se)}`;
+const AH = D.abl.hold, AA = D.abl.all, SP = D.sp, HP = D.hp, MM = D.mm;
+const NAME = {
+  rt_base: "RT-trained baseline", da_base: "DA-trained baseline", rt_custom: "RT + Kumo load, wind, solar forecasts",
+  pf_all: "Actual load, wind, solar + errors", pf_errs: "Errors only (Meteologica levels kept)", pf_load: "Actual load only",
+  pf_solar: "Actual solar only", pf_wind: "Actual wind only", head: "D-2 capacity headroom (usable)", headpf: "Actual capacity headroom",
+};
+const PF = new Set(["pf_all", "pf_errs", "pf_load", "pf_solar", "pf_wind", "headpf"]);
+const ORDER = ["pf_all", "pf_errs", "pf_load", "pf_solar", "pf_wind", "headpf", "head", "rt_custom", "da_base"];
+
+// ---------- narrative
+const L = AH.pf_load.vs_rt_base, S = AH.pf_solar.vs_rt_base, W = AH.pf_wind.vs_rt_base, PA = AH.pf_all.vs_rt_base, E = AH.pf_errs.vs_rt_base;
+const ft = k => D.ft.find(r => r.f === k);
+const solP = ft("solar_ramp_err_met")["premium_band+nre"], hdP = ft("headroom_econ")["premium_band"];
+$("lede").innerHTML = `<p>Perfect knowledge of PJM's actual load, wind and solar improves the RT price model by $${f2(PA.gain)}/MWh a day, but it does little for spikes. This page asks why, and which of those inputs, and which other conditions, are worth forecasting better. Everything is 2025 and day-ahead: forecasts made by 11:00 EPT the day before.</p>
+<p><b>Load is the lever, then solar; wind is not.</b> Given actual load alone the model gains ${gtxt(L)} (${Math.round(100 * L.gain / PA.gain)}% of the full ceiling), actual solar alone ${gtxt(S)}, actual wind alone ${gtxt(W)}, which is noise. Most of the value is the forecast miss itself: keeping Meteologica's forecasts and adding only the actual-minus-forecast columns gives ${gtxt(E)}.</p>
+<p><b>Spikes are a different problem.</b> The models already rank spike hours almost perfectly (AUC ${f2(SP.rt_base.auc_q500)}), but their median sits at $${f0(SP.rt_base.q500)} when RT averages $${f0(SP.rt_mean)}. A median never chases a 2%-of-hours tail. And at the same net load, whether RT spikes depends mostly on things the forecast level of load, wind and solar does not capture: how tight capacity is, and how steeply load and solar move against their forecasts hour to hour.</p>
+<p><b>The renewables observation holds, for solar.</b> When solar falls faster than Meteologica forecast in that hour, RT spikes the DA market did not price become more likely (AUC ${f2(solP.auc)}, 95% interval ${f2(solP.lo)}&ndash;${f2(solP.hi)}), over and above the net-load ramp miss, in both halves of the year. The "above forecast, then below" pattern itself is not there.</p>`;
+
+const fig = (b, l, c) => `<div class="fig" style="--fc:var(${c})"><span class="big">${b}</span><span class="lbl">${l}</span></div>`;
+$("figs").innerHTML = [
+  fig(`${Math.round(100 * L.gain / PA.gain)}%`, `of the perfect-foresight gain comes from actual load alone (solar ${Math.round(100 * S.gain / PA.gain)}%; wind: none beyond noise)`, "--rt"),
+  fig(`$${f0(SP.rt_base.q500)} vs $${f0(SP.rt_mean)}`, `the RT model's median vs actual RT on spike hours (RT &ge; $150), although it ranks those hours at AUC ${f2(SP.rt_base.auc_q500)}`, "--da"),
+  fig(f2(hdP.auc), `AUC of low capacity headroom for spikes at equal net load, the strongest realised signal, yet no gain in the model`, "--pf"),
+].join("");
+
+// ---------- ablation table
+let h = `<thead><tr><th>RT model with&hellip;</th><th class="n">MAE</th><th class="n">RMSE</th><th class="n">Spike-hour MAE</th><th class="n">Calm-day MAE</th><th class="n">Gain vs RT-trained</th><th class="n">Days won</th><th class="n">Full-year gain</th></tr></thead><tbody>`;
+h += `<tr><td>${NAME.rt_base}</td><td class="n">${f2(AH.rt_base.mae)}</td><td class="n">${f2(AH.rt_base.rmse)}</td><td class="n">${f1(AH.rt_base.spike_mae)}</td><td class="n">${f2(AH.rt_base.calm_mae)}</td><td class="n">&ndash;</td><td class="n">&ndash;</td><td class="n">&ndash;</td></tr>`;
+for (const k of ORDER) {
+  const r = AH[k], g = r.vs_rt_base, ga = AA[k].vs_rt_base;
+  h += `<tr><td>${NAME[k]}${PF.has(k) ? ` <span class="sub">(ceiling)</span>` : ""}</td><td class="n">${f2(r.mae)}</td><td class="n">${f2(r.rmse)}</td><td class="n">${f1(r.spike_mae)}</td><td class="n">${f2(r.calm_mae)}</td>
+    <td class="n ${sig(g) ? "win" : neg(g) ? "lose" : ""}">${gtxt(g)}</td><td class="n">${pc(g.win)}</td><td class="n ${sig(ga) ? "win" : neg(ga) ? "lose" : ""}">${gtxt(ga)}</td></tr>`;
+}
+$("abl").innerHTML = h + `</tbody><caption class="sub" style="caption-side:bottom;text-align:left;padding-top:8px">$/MWh on the ${D.n.hold_days} held-out days; full-year gain over all ${D.n.all_days} days. Spike hours: RT &ge; $150. Calm days: all but the 10% of days with the highest RT peak. The DA-trained model is the closest on spike hours, because DA prices run higher on the hours RT spikes, but it is worse on every other measure.</caption>`;
+
+// ---------- why spikes stay missed
+$("why-note").innerHTML = `On the ${SP.hours} spike hours (${SP.days} days, ${pc(SP.share_hours)} of 2025) RT averaged $${f0(SP.rt_mean)}. AUC: how well each forecast ranks spike hours above the rest (1 = perfectly).`;
+h = `<thead><tr><th></th><th class="n">RT-trained</th><th class="n">Perfect foresight</th></tr></thead><tbody>`;
+for (const [lab, k, fmt] of [["Median forecast", "q500", v => "$" + f0(v)], ["Mean forecast", "mean", v => "$" + f0(v)], ["95th percentile", "q950", v => "$" + f0(v)],
+  ["AUC of the median", "auc_q500", f3], ["Spike hours with 95th pct &ge; $150", "q950_hit", pc], ["Other hours with 95th pct &ge; $150", "q950_false", pc]])
+  h += `<tr><td>${lab}</td><td class="n">${fmt(SP.rt_base[k])}</td><td class="n">${fmt(SP.pf_all[k])}</td></tr>`;
+$("why").innerHTML = h + "</tbody>";
+$("an-note").innerHTML = `Is it extrapolation? For each spike hour: how many of the model's 10,000 context hours had net load at least as high (within 2 GW). Only the biggest spikes lack examples; most spike hours had plenty, and at those loads RT usually did not spike. Perfect-foresight forecasts shown.`;
+h = `<thead><tr><th>Comparable context hours</th><th class="n">Spike hours</th><th class="n">RT avg</th><th class="n">Median</th><th class="n">95th pct</th></tr></thead><tbody>`;
+for (const r of SP.analog) h += `<tr><td>${r.k}</td><td class="n">${r.hours}</td><td class="n">$${f0(r.rt)}</td><td class="n">$${f0(r.q500)}</td><td class="n">$${f0(r.q950)}</td></tr>`;
+$("an").innerHTML = h + "</tbody>";
+
+// ---------- median vs mean
+const cm = MM.custom_vs_base_on_mean;
+$("mm-note").innerHTML = `Held-out days, $/MWh; bias = RT minus forecast. The mean is pulled up by the predicted tail: it helps on spike hours but runs about $6 too high on ordinary ones, so it loses on MAE and does not win on RMSE either, a sign the predicted tail is spread over the wrong hours. One side result: on the mean, Kumo's own load, wind and solar forecasts do help the RT model (${gtxt(cm)}, ${pc(cm.win)} of days), so they seem to place the tail better without moving the median.`;
+h = `<thead><tr><th></th><th class="n" colspan="5">Median</th><th class="n" colspan="5">Mean</th><th class="n">Mean vs median</th></tr><tr><th>Model</th>${["MAE", "RMSE", "Bias", "Spike-hr MAE", "Calm MAE"].map(x => `<th class="n">${x}</th>`).join("").repeat(2)}<th class="n">MAE gain</th></tr></thead><tbody>`;
+for (const k of ["da_base", "rt_base", "rt_custom", "pf_all"]) {
+  const r = MM[k], cells = pt => [f2(r[pt].mae), f2(r[pt].rmse), sg(r[pt].bias, f2), f1(r[pt].spike_mae), f2(r[pt].calm_mae)].map(x => `<td class="n">${x}</td>`).join("");
+  h += `<tr><td>${NAME[k]}</td>${cells("med")}${cells("mean")}<td class="n ${sig(r.mean_vs_med) ? "win" : neg(r.mean_vs_med) ? "lose" : ""}">${gtxt(r.mean_vs_med)}</td></tr>`;
+}
+$("mm").innerHTML = h + "</tbody>";
+
+// ---------- feature tests
+$("ft-note").innerHTML = `0.5 = no information beyond net load; bars are 95% intervals from resampling whole days. Hollow markers: the effect does not point the same way in January&ndash;June and July&ndash;December. Features where low values go with spikes (headroom, falling solar) are flipped so that further right always means more spike-prone. Errors are actual minus forecast and are only known afterwards: they show what would be worth forecasting, not inputs available today. ${D.n.n_feat} features &times; 2 definitions &times; 2 controls were tested, so expect a few chance hits among the weaker ones.`;
+let lab = "premium", st = "band";
+const GC = { margin: "--pf", load: "--rt", net: "--kumo", ren: "--cu", sym: "--prod" };
+function drawFt() {
+  const rows = D.ft.filter(r => r[`${lab}_${st}`]).map(r => ({ ...r, v: r[`${lab}_${st}`] })).sort((a, b) => a.v.auc - b.v.auc);
+  const y = rows.map(r => r.lab + (r.v.flip ? " (low)" : ""));
+  Plotly.react($("c-ft"), [{
+    type: "scatter", mode: "markers", y, x: rows.map(r => r.v.auc),
+    error_x: { type: "data", symmetric: false, array: rows.map(r => r.v.hi - r.v.auc), arrayminus: rows.map(r => r.v.auc - r.v.lo), color: css("--muted"), thickness: 1.2, width: 0 },
+    marker: { size: 10, color: rows.map(r => css(GC[r.grp])), symbol: rows.map(r => r.v.stable ? "circle" : "circle-open"), line: { width: 2, color: rows.map(r => css(GC[r.grp])) } },
+    customdata: rows.map(r => [r.v.lo, r.v.hi, r.v.h1, r.v.h2, r.kind]),
+    hovertemplate: "AUC %{x:.3f} (95%: %{customdata[0]:.2f}&ndash;%{customdata[1]:.2f})<br>Jan&ndash;Jun %{customdata[2]:.2f}, Jul&ndash;Dec %{customdata[3]:.2f} (unflipped)<br>%{customdata[4]}<extra></extra>",
+  }], baseLayout({
+    height: 90 + rows.length * 30, margin: { l: 300, r: 16, t: 10, b: 40 }, showlegend: false,
+    xaxis: { range: [0.35, 1], title: { text: "AUC at equal net load (0.5 = nothing beyond net load)" }, gridcolor: css("--rule"), color: css("--muted"), zeroline: false },
+    yaxis: { type: "category", color: css("--fg"), gridcolor: "rgba(0,0,0,0)", automargin: true },
+    shapes: [{ type: "line", x0: 0.5, x1: 0.5, y0: 0, y1: 1, yref: "paper", line: { color: css("--muted"), dash: "dot", width: 1 } }],
+  }), CFG);
+}
+for (const k of ["premium", "spike"]) $(`lab-${k}`).onclick = () => { lab = k; ["premium", "spike"].forEach(b => $(`lab-${b}`).setAttribute("aria-pressed", String(b === k))); drawFt(); };
+for (const k of ["band", "band+nre"]) $(`st-${k}`).onclick = () => { st = k; ["band", "band+nre"].forEach(b => $(`st-${b}`).setAttribute("aria-pressed", String(b === k))); drawFt(); };
+
+// ---------- headroom
+$("hp-note").innerHTML = `Headroom = PJM's available generator capacity (economic max, Data Miner <span class="num">day_gen_capacity</span>) minus load. The feed posts once a day for the previous day, so at the cutoff the latest is D&minus;2. The usable proxy, D&minus;2's economic max in the same hour minus Meteologica's load forecast, tracks D's actual minimum headroom closely (correlation ${f2(HP.corr)}). On its own it picks out spike days well: AUC ${f2(HP.auc_proxy)}, and ${f2(HP.within_proxy)} among days with the same forecast peak load. Added to the price model, it does not help: neither the usable version nor the actual one beats simply knowing load.`;
+h = `<thead><tr><th>Usable headroom proxy, daily minimum</th><th class="n">Days</th><th class="n">Days with a spike</th></tr></thead><tbody>`;
+for (const r of HP.quint) h += `<tr><td>${r.k}</td><td class="n">${r.days}</td><td class="n">${pc(r.share)}</td></tr>`;
+$("hpq").innerHTML = h + "</tbody>";
+h = `<thead><tr><th>RT model with&hellip;</th><th class="n">MAE</th><th class="n">Spike-hr MAE</th><th class="n">Gain vs RT-trained</th></tr></thead><tbody>`;
+for (const k of ["head", "headpf", "pf_load"]) { const r = AH[k], g = r.vs_rt_base; h += `<tr><td>${NAME[k]}</td><td class="n">${f2(r.mae)}</td><td class="n">${f1(r.spike_mae)}</td><td class="n ${sig(g) ? "win" : neg(g) ? "lose" : ""}">${gtxt(g)}</td></tr>`; }
+$("hpm").innerHTML = h + `</tbody><caption class="sub" style="caption-side:bottom;text-align:left;padding-top:8px">Held-out days, $/MWh. Actual headroom already contains actual load, so compare it with "Actual load only".</caption>`;
+
+// ---------- next steps
+$("next").innerHTML = [
+  `<b>Day-ahead load, at peak and on the ramps.</b> Actual load alone is worth ${gtxt(L)} $/MWh a day. Kumo's load forecast already beats Meteologica's on average (Artifact 2) but did not move RT, so the improvement has to land on the peak and ramp hours, where the load-ramp miss against ISO is the clearest spike signal.`,
+  `<b>Solar, especially how fast it falls.</b> Actual solar is worth ${gtxt(S)}, and faster-than-forecast solar drops go with RT spikes the DA market missed. A forecast of the evening solar ramp, or of its uncertainty, is the renewable target. Wind is not worth more effort for RT.`,
+  `<b>Treat spikes as their own forecast.</b> The model already knows when spikes are likely; the median cannot express how big. A spike-probability and spike-size model, or switching to an upper quantile only when that probability is high, can be tested on the existing predictions with no new GPU runs.`,
+  `<b>Capacity tightness, beyond what the model sees.</b> Low headroom is the strongest realised spike signal but adds nothing as an input next to load. If it is to help, it needs a forward view of D's available capacity (outage and offer changes) rather than D&minus;2's value, and probably a spike model rather than the median model.`,
+  `<b>Not testable with 2025 data in the database:</b> interchange (tie flows), 5-minute load and intraday forecast revisions are stored only from late October 2026.`,
+].map(x => `<li>${x}</li>`).join("");
+
+$("method").innerHTML = `
+<p><b>Models.</b> Kumo-Tabular large, 8 estimators, seed 0, the original baseline's 21 inputs, trained on the RT system energy price. Daily walk-forward through 2025: for each day D, context = the last 10,000 hours ending D&minus;2 (D&minus;1's RT is not complete at 11:00 EPT on D&minus;1), forecast = D's 24 hours, median of the predictive distribution unless stated. Perfect-foresight runs replace Meteologica's load, wind or solar with the actual value (from October 2023, so context and forecast match), recompute the derived inputs (thermal stress, duck curve), and add actual minus ISO and actual minus Meteologica for that input. "Errors only" keeps Meteologica's values and adds just the difference columns.</p>
+<p><b>Scoring.</b> Held-out days = the ${D.n.hold_days} days of 2025 whose day number is not a multiple of 3. Gains are paired by day and resampled by day (2,000 draws); &plusmn; is one standard error, and a gain counts only above two. Nothing touched 2026.</p>
+<p><b>Spike tests.</b> Hours with RT &ge; $150 (177 hours, 70 days) or RT &minus; DA &ge; $75 (116 hours, 68 days). Each condition's AUC is computed within cells of 5 GW of actual net load &times; season (and, for the second control, &times; terciles of the 3-hour net-load ramp miss against ISO), weighted by spike count. Intervals: 200 resamples of whole days. Realised data from the ecore database: PJM generation by fuel, available generator capacity, IIR offline capacity, regulation reserves; ISO forecasts are the latest by 11:00 EPT on D&minus;1.</p>
+<p>Code: <span class="num">research/pjm_rt/</span> (spikes.py, spikes_ramp.py, make_headroom.py, artifact6_data.py) and <span class="num">research/pjm_renew/make_custominputs.py</span> (--only, --errors-only), branch pjm-feature-engineering.</p>`;
+
+// ---------- charts
+function baseLayout(extra = {}) {
+  const fg = css("--fg"), mu = css("--muted"), ru = css("--rule");
+  return Object.assign({
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { family: "IBM Plex Sans, system-ui, sans-serif", color: fg, size: 12 },
+    margin: { l: 56, r: 12, t: 10, b: 36 },
+    xaxis: { gridcolor: ru, linecolor: ru, zeroline: false, color: mu },
+    yaxis: { gridcolor: ru, linecolor: ru, zeroline: false, color: mu },
+    legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", bgcolor: "rgba(0,0,0,0)", font: { color: fg } },
+    hoverlabel: { bgcolor: css("--panel"), bordercolor: ru, font: { color: fg, family: "IBM Plex Mono, ui-monospace, monospace" } },
+  }, extra);
+}
+const CFG = { displayModeBar: false, responsive: true };
+function drawAbl() {
+  const ks = ORDER.slice().reverse();
+  const col = k => css(k === "head" || k === "rt_custom" ? "--cu" : k === "da_base" ? "--da" : k === "headpf" ? "--pf" : "--rt");
+  Plotly.react($("c-abl"), [{
+    type: "bar", orientation: "h", y: ks.map(k => NAME[k]), x: ks.map(k => AH[k].vs_rt_base.gain),
+    error_x: { type: "data", array: ks.map(k => 2 * AH[k].vs_rt_base.se), color: css("--muted"), thickness: 1.2, width: 4 },
+    marker: { color: ks.map(k => col(k)), opacity: ks.map(k => PF.has(k) ? 0.75 : 1) },
+    hovertemplate: "%{x:+.2f} $/MWh a day<extra></extra>",
+  }], baseLayout({
+    height: 70 + ks.length * 34, margin: { l: 260, r: 16, t: 10, b: 40 }, showlegend: false,
+    xaxis: { title: { text: "Daily RT MAE gain vs the RT-trained model, $/MWh (held-out days)" }, gridcolor: css("--rule"), color: css("--muted"), zeroline: true, zerolinecolor: css("--muted") },
+    yaxis: { type: "category", color: css("--fg"), gridcolor: "rgba(0,0,0,0)", automargin: true },
+  }), CFG);
+}
+const pad = n => String(n).padStart(2, "0");
+const isoT = ms => { const d = new Date(ms); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00`; };
+const t0 = Date.parse(D.ser.t0.replace(" ", "T") + "Z"), X = D.ser.rt.map((_, i) => isoT(t0 + i * 3600e3));
+function drawTS() {
+  const ln = (k, name, c, extra = {}) => Object.assign({ x: X, y: D.ser[k], name, type: "scatter", mode: "lines", line: { color: css(c), width: 1.5 }, hovertemplate: "%{y:.0f}" }, extra);
+  Plotly.react($("c-ts"), [
+    ln("pf_q95", "Perfect foresight, 95th pct", "--pf", { line: { width: 0, color: css("--pf") }, showlegend: false, hoverinfo: "skip", hovertemplate: null }),
+    ln("pf_med", "Perfect foresight, median", "--pf", { fill: "tonexty", fillcolor: "rgba(138,109,47,0.15)" }),
+    ln("rt", "Actual RT", "--actual", { line: { color: css("--actual"), width: 1.6 } }),
+    ln("base_med", "RT-trained, median", "--rt"),
+    ln("load_med", "Actual load only, median", "--cu", { visible: "legendonly" }),
+    ln("base_q95", "RT-trained, 95th pct", "--rt", { visible: "legendonly", line: { color: css("--rt"), width: 1.2, dash: "dot" } }),
+    ln("da", "Actual DA (after cutoff)", "--muted", { visible: "legendonly", line: { color: css("--muted"), width: 1.2, dash: "dot" } }),
+  ], baseLayout({
+    height: 460, hovermode: "x unified", margin: { l: 56, r: 12, t: 40, b: 10 },
+    xaxis: {
+      type: "date", hoverformat: "%a %d %b %Y, %H:00", gridcolor: css("--rule"), color: css("--muted"), range: ["2025-06-20", "2025-06-28"],
+      rangeslider: { visible: true, thickness: 0.08, bgcolor: css("--bg"), bordercolor: css("--rule") },
+    },
+    yaxis: { title: { text: "$/MWh" }, gridcolor: css("--rule"), color: css("--muted"), zeroline: false },
+  }), CFG);
+}
+const drawAll = () => { drawAbl(); drawFt(); drawTS(); };
+drawAll();
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawAll); } catch (e) {}
+new MutationObserver(drawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>
