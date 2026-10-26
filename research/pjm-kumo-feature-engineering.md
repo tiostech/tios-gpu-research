@@ -438,3 +438,29 @@ Baseline settings. 2025 ALL 4.635 / 9.32 vs 4.672 / 9.49 (gain +0.038 +- 0.050, 
 Reading: the DA price already reflects load / wind / solar about as well as perfect knowledge would; better forecasts
 of these (and the custom-minus-ISO mis-commitment columns) cannot help this price model. Run order: the perfect-
 foresight run was moved ahead of the backpublishes at the user's request (W2_bp restarted).
+
+## RT study / Artifact 5: Kumo forecasting PJM RT system energy price (2026-10-26)
+
+Page: https://claude.ai/artifact/GvsXkAyoB6Z6SXyoAY4SNW (`research/pjm_rt/artifact5_data.py` + `artifact5_template.html`).
+Datasets: `research/pjm_rt/make_rt.py` copies v0 / v0_custom_all_met / v0_actuals_all with y = rt_energy_price
+(after checking v0's y == da_energy_price on the same pull). v0_custom_all_met = Kumo P2 load / W2 wind / S2 solar
+(backpublished from 2023-10-01) + custom minus ISO and custom minus Meteologica (`make_custominputs.py --minus-met`).
+All RT runs: daily walk-forward, baseline settings, `--context-gap-hours 24` (D-1's RT is not known at the cutoff).
+Everything scored on 2025 RT; HOLD = 243 days; paired day-block bootstrap.
+
+| HOLD, RT MAE / RMSE | MAE | RMSE | gain vs RT-trained |
+|---|---|---|---|
+| DA-trained (baseline_v0_daily) | 13.567 | 35.70 | -1.284 +- 0.429 |
+| RT-trained (v0_rt_daily) | 12.283 | 36.56 | -- |
+| RT + Kumo conditions (v0_custom_all_met_rt_daily) | 12.262 | 36.36 | +0.021 +- 0.068 (win 52%) |
+| RT + perfect foresight (v0_actuals_all_rt_daily) | 11.340 | 35.58 | +0.943 +- 0.181 (win 70%) |
+| Production DAEP | 13.407 | 35.27 | -- |
+
+- **RT-trained beats DA-trained on RT**: +1.28 +- 0.43 (HOLD), +1.27 +- 0.33 (ALL). The gain is all on calm days
+  (10.93 -> 9.51). On the top 10% days by RT max the two are level (39.58 vs 39.69), and HOLD RMSE is slightly
+  worse (36.56 vs 35.70): training on RT fixes ordinary hours, not spikes.
+- **Kumo conditions do not help RT**: a tie in every view (ALL -0.026 +- 0.074; calm -0.02; volatile -0.06 +- 0.59).
+- **But conditions matter for RT**, unlike DA (Artifact 4 null): perfect foresight gives +0.94 +- 0.18, so the
+  headroom exists. Kumo's load / wind / solar are not different enough from Meteologica's, or not right often
+  enough, to capture it.
+- For scale: actual DA misses RT by 13.33 MAE in 2025 (corr 0.64; RT max 1838 vs DA max 537).

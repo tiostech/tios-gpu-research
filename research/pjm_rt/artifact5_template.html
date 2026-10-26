@@ -1,0 +1,303 @@
+<title>PJM RT Price with Kumo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/3.1.0/plotly-basic.min.js"></script>
+<style>
+/* Layout: single reading column in the house style of the PJM pages (Artifacts 1-4): answers, one scorecard of
+   all models against RT, where they differ, interactive year, pipeline, specs, method. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --fg: #1b2230; --muted: #5d6676; --rule: #dde1e8;
+  --actual: #1b2230; --met: #b5562a; --iso: #7a5aa6; --kumo: #1f6f8b; --da: #b5562a; --rt: #1f6f8b; --cu: #2e7d4f; --pf: #8a6d2f; --prod: #9aa1ad;
+  --good: #2e7d4f; --bad: #a33a2b;
+  --display: "Fraunces", Georgia, serif; --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --panel: #1a2029; --fg: #e4e8ee; --muted: #9aa3b1; --rule: #2c3440;
+  --actual: #e4e8ee; --met: #e58a5c; --iso: #b39ddb; --kumo: #5fb3cf; --da: #e58a5c; --rt: #5fb3cf; --cu: #6cc48f; --pf: #d0ad62; --prod: #6b7380;
+  --good: #6cc48f; --bad: #e57b6b; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1a2029; --fg: #e4e8ee; --muted: #9aa3b1; --rule: #2c3440;
+  --actual: #e4e8ee; --met: #e58a5c; --iso: #b39ddb; --kumo: #5fb3cf; --da: #e58a5c; --rt: #5fb3cf; --cu: #6cc48f; --pf: #d0ad62; --prod: #6b7380;
+  --good: #6cc48f; --bad: #e57b6b; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1000px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 56px; display: grid; gap: 28px; }
+h1 { font-family: var(--display); font-weight: 600; font-size: 31px; line-height: 1.15; margin: 0; text-wrap: balance; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; font-weight: 600; }
+h3 { margin: 0; font-size: 16px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+a { color: var(--kumo); }
+.lede { color: var(--muted); display: grid; gap: 8px; }
+.lede b { color: var(--fg); }
+.part { font-family: var(--display); font-size: 22px; font-weight: 600; margin: 8px 0 -8px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 20px; min-width: 0; display: grid; gap: 16px; }
+.stack { display: grid; gap: 8px; }
+.sub { color: var(--muted); font-size: 13px; }
+.num, td.n, th.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 640px) { .figs { grid-template-columns: 1fr; } }
+.fig { border-top: 2px solid var(--fc, var(--kumo)); padding-top: 10px; display: grid; gap: 2px; }
+.fig .big { font-family: var(--display); font-size: 30px; line-height: 1.1; color: var(--fc, var(--kumo)); }
+.fig .lbl { font-size: 13px; color: var(--muted); }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+tr.grp td { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding-top: 14px; border-bottom: 0; font-weight: 600; }
+.win { color: var(--good); font-weight: 500; }
+.lose { color: var(--bad); }
+.key { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+.two > div { min-width: 0; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 5px 12px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--kumo); color: var(--panel); }
+.seg button:focus-visible { outline: 2px solid var(--kumo); outline-offset: -2px; }
+.bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.ctrls { display: flex; flex-wrap: wrap; gap: 8px; }
+.prose { display: grid; gap: 12px; }
+.prose ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 72ch; }
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.flow .box { flex: 1 1 150px; min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; align-content: start; }
+.flow .box b { font-size: 14px; }
+.flow .box span { font-size: 12.5px; color: var(--muted); }
+.flow .box.k { border-color: var(--kumo); }
+.flow .arr { align-self: center; color: var(--muted); font-size: 18px; }
+@media (max-width: 640px) { .flow { flex-direction: column; } .flow .arr { transform: rotate(90deg); align-self: center; } }
+.specs td { font-size: 13.5px; }
+.specs td:first-child { font-weight: 600; white-space: nowrap; }
+.specs .code { font-family: var(--mono); font-size: 12px; color: var(--muted); font-weight: 400; display: block; }
+.small { color: var(--muted); font-size: 13px; display: grid; gap: 8px; }
+.small p { max-width: none; }
+.plot { width: 100%; min-width: 0; }
+</style>
+
+<div class="wrap">
+  <header class="stack">
+    <h1>Forecasting PJM real-time prices a day ahead with Kumo</h1>
+    <div class="lede" id="lede"></div>
+  </header>
+
+  <section class="panel" aria-labelledby="h-sc">
+    <h2 id="h-sc">PJM RT system energy price, 2025: which model forecasts it best?</h2>
+    <div class="figs" id="figs"></div>
+    <div class="tbl"><table id="score"></table></div>
+    <p class="sub">$/MWh, scored against the hourly RT system energy price. Every model forecasts day D's 24 hours with what was known by 11:00 EPT on D&minus;1. Gain = the reference model's daily MAE minus this model's, averaged over days, &plusmn; one bootstrap standard error; it counts only above two. Held-out days = the 243 days of 2025 not used to choose anything. 80% band = share of hours inside the model's 10%&ndash;90% range. The perfect-foresight column sees the actual load, wind and solar, so it is a ceiling, not a forecast.</p>
+    <div class="prose" id="sc-note"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-wh">
+    <h2 id="h-wh">Where the differences are</h2>
+    <div class="two">
+      <div class="stack"><h3>By season</h3><div class="sub">RT MAE, $/MWh, full 2025</div><div id="c-season" class="plot"></div></div>
+      <div class="stack"><h3>By hour of day (EPT, hour beginning)</h3><div class="sub">RT MAE, $/MWh, full 2025</div><div id="c-hour" class="plot"></div></div>
+    </div>
+    <div class="stack">
+      <h3>Calm days, volatile days and stressed hours</h3>
+      <div class="tbl"><table id="regime"></table></div>
+      <p class="sub" id="regime-note"></p>
+    </div>
+    <div class="stack">
+      <h3>The ten worst RT days for the RT-trained Kumo</h3>
+      <div class="tbl"><table id="spike"></table></div>
+      <p class="sub">Daily RT MAE, $/MWh. The lowest error on each day among the forecasts (perfect foresight excluded) is highlighted.</p>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-ts">
+    <div class="bar">
+      <h2 id="h-ts">Hour by hour</h2>
+      <div class="seg" role="group" aria-label="Resolution">
+        <button type="button" id="res-h" aria-pressed="true">Hourly</button>
+        <button type="button" id="res-d" aria-pressed="false">Daily average</button>
+      </div>
+    </div>
+    <p class="sub">$/MWh. The DA price (known only after the cutoff), the perfect-foresight run and production are hidden to start with; click a legend entry to show or hide a line.</p>
+    <div id="c-ts" class="plot"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-how">
+    <h2 id="h-how">How it works</h2>
+    <div class="flow" aria-label="Models compared">
+      <div class="box"><b>Same inputs, D&minus;1 morning</b><span>Production's 17 price-model inputs (Meteologica load, wind and solar; outages; gas, coal; stress indices) + smoothed gas and time columns</span></div>
+      <div class="arr" aria-hidden="true">&rarr;</div>
+      <div class="box k"><b>Kumo trained on DA</b><span>Context: last 10,000 hours with actual DA prices (D&minus;1 DA is known, cleared on D&minus;2)</span></div>
+      <div class="box k"><b>Kumo trained on RT</b><span>Context: last 10,000 hours with actual RT prices, ending at D&minus;2 (D&minus;1 RT is incomplete at the cutoff)</span></div>
+      <div class="box k"><b>+ Kumo conditions</b><span>Kumo load, wind and solar replace Meteologica's; stress and duck-curve inputs recomputed; + Kumo minus PJM and Kumo minus Meteologica for each</span></div>
+      <div class="arr" aria-hidden="true">&rarr;</div>
+      <div class="box"><b>RT price for D</b><span>Hourly median, scored on 2025 RT</span></div>
+    </div>
+    <div class="prose">
+      <p><b>Why a DA-trained model can forecast RT.</b> RT and DA share the same fundamentals and average the same level over a year, so a forecast of DA is a reasonable forecast of RT. A model trained on RT learns RT's own pattern (its spikes, its typical gap to DA) but has to work from context one day staler, and RT's spikes make that context noisier.</p>
+      <p><b>Why the Kumo conditions might matter more for RT.</b> RT settles on what actually happens. When load, wind or solar come in away from PJM's forecast, PJM has committed the wrong units and RT moves. The Kumo forecasts are closer to the actuals than PJM's or Meteologica's (for load and solar), and their gap to PJM's forecast is a direct estimate of that miss.</p>
+      <p>Earlier pages: <a href="https://claude.ai/artifact/SPd1KUEWoAyqLpFArYYLJw" target="_blank" rel="noopener">Kumo vs the production PJM forecast</a>, <a href="https://claude.ai/artifact/4TGPBZGrscdy1zawsqqoWM" target="_blank" rel="noopener">Kumo load forecast</a>, <a href="https://claude.ai/artifact/4GJv29JH9TMnqZpQAnS2T2" target="_blank" rel="noopener">Kumo wind and solar forecasts</a>.</p>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-specs">
+    <h2 id="h-specs">Model specifications</h2>
+    <div class="tbl"><table class="specs" style="min-width:1000px">
+      <thead><tr><th>Model</th><th>Trained on</th><th>Context</th><th>Inputs</th><th>Cutoff</th><th>Estimators / seed</th><th>Scored</th></tr></thead>
+      <tbody id="specs"></tbody>
+    </table></div>
+  </section>
+
+  <section class="small" aria-labelledby="h-method">
+    <h2 id="h-method">Method note</h2>
+    <div id="method" class="small"></div>
+  </section>
+</div>
+
+<script>
+const D = __DATA__;
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const f0 = v => Math.round(v).toLocaleString(), f1 = v => v.toFixed(1), f2 = v => v.toFixed(2), f3 = v => v.toFixed(3);
+const pc = v => Math.round(v * 100) + "%", sg = (v, f) => (v >= 0 ? "+" : "&minus;") + f(Math.abs(v));
+const SC = D.score, H = SC.hold, A = SC.all;
+const NAME = { da_base: "Kumo trained on DA", rt_base: "Kumo trained on RT", rt_custom: "RT + Kumo conditions", rt_pf: "RT + perfect foresight", prod: "Production (DA)" };
+const SHORT = { da_base: "DA-trained", rt_base: "RT-trained", rt_custom: "RT + Kumo conditions", rt_pf: "Perfect foresight", prod: "Production" };
+const COL = { da_base: "--da", rt_base: "--rt", rt_custom: "--cu", rt_pf: "--pf", prod: "--prod" };
+const cols = D.cols, allc = [...cols, "prod"], fc = cols.filter(c => c !== "rt_pf");
+const sig = g => g && g.gain > 2 * g.se;
+const gtxt = g => `${sg(g.gain, f3)} &plusmn; ${f3(g.se)}`;
+
+// ---------- narrative
+const rtVsDa = H.rt_base.vs_da_base, cuVsRt = H.rt_custom.vs_rt_base, pfVsRt = H.rt_pf.vs_rt_base;
+const q1 = sig(rtVsDa) ? "the RT-trained model is better" : sig({ gain: -rtVsDa.gain, se: rtVsDa.se }) ? "the DA-trained model is better" : "neither, they are tied";
+const q2 = sig(cuVsRt) ? "yes" : cuVsRt.gain > 0 ? "not measurably" : "no";
+$("lede").innerHTML = `<p>Three versions of the Kumo price model forecast PJM's real-time (RT) system energy price for 2025, a day ahead: the original baseline trained on DA prices (the one already in use for DA), the same inputs trained on RT prices, and the RT model with Kumo's own load, wind and solar forecasts and their gaps to PJM's and Meteologica's forecasts.</p>
+<p><b>Does training on RT beat training on DA, for RT? ${q1[0].toUpperCase() + q1.slice(1)}.</b> On held-out days the RT MAE is ${f2(H.da_base.mae)} for the DA-trained model and ${f2(H.rt_base.mae)} for the RT-trained one (gain ${gtxt(rtVsDa)} $/MWh, ${pc(rtVsDa.win)} of days won).</p>
+<p><b>Do the Kumo conditions help RT? ${q2[0].toUpperCase() + q2.slice(1)}.</b> Adding them to the RT model changes the held-out RT MAE by ${gtxt(cuVsRt)} $/MWh (${pc(cuVsRt.win)} of days won). ${sig(pfVsRt) ? `Conditions do matter for RT, though: with the actual load, wind and solar the model gains ${gtxt(pfVsRt)} $/MWh (${pc(pfVsRt.win)} of days won), where the same test on DA prices found nothing (Artifact 4). Kumo's forecasts are not far enough from Meteologica's, or not right often enough, to capture any of that headroom.` : `Even perfect knowledge of the actual load, wind and solar gives only ${gtxt(pfVsRt)}.`}</p>
+<p><b>Where the RT-trained gain comes from.</b> Calm days: RT MAE ${f2(D.regime.calm.da_base)} DA-trained vs ${f2(D.regime.calm.rt_base)} RT-trained. On the ${D.regime.volatile.days} most volatile days the two are level (${f2(D.regime.volatile.da_base)} vs ${f2(D.regime.volatile.rt_base)}), and on held-out days the RT-trained model's RMSE is ${H.rt_base.rmse > H.da_base.rmse ? "higher" : "lower"} (${f2(H.rt_base.rmse)} vs ${f2(H.da_base.rmse)}): training on RT fixes the ordinary hours, not the spikes.</p>
+<p>For scale: even the actual DA clearing price, which is not known at the cutoff, misses RT by $${f2(D.spread.mae_rt_vs_da)}/MWh on average in 2025. RT reached $${f0(D.spread.max_rt)} against a DA high of $${f0(D.spread.max_da)}.</p>`;
+
+const fig = (b, l, c) => `<div class="fig" style="--fc:var(${c})"><span class="big">${b}</span><span class="lbl">${l}</span></div>`;
+$("figs").innerHTML = [
+  fig(gtxt(rtVsDa), "RT-trained vs DA-trained, daily RT MAE gain, held-out days", sig(rtVsDa) || sig({ gain: -rtVsDa.gain, se: rtVsDa.se }) ? "--rt" : "--prod"),
+  fig(gtxt(cuVsRt), "Kumo conditions vs RT-trained, daily RT MAE gain, held-out days", sig(cuVsRt) ? "--cu" : "--prod"),
+  fig(gtxt(pfVsRt), "perfect-foresight conditions vs RT-trained (ceiling, not a forecast), held-out days", sig(pfVsRt) ? "--pf" : "--prod"),
+].join("");
+
+let h = `<thead><tr><th></th>${allc.map(c => `<th class="n"><span class="key" style="background:var(${COL[c]})"></span>${NAME[c]}</th>`).join("")}</tr></thead><tbody>`;
+for (const [k, lab] of [["hold", `Held-out days (${H.days})`], ["all", `Full 2025 (${A.days} days)`]]) {
+  const s = SC[k];
+  const bestc = fc.concat("prod").reduce((a, c) => s[c].mae < s[a].mae ? c : a, "prod");
+  h += `<tr class="grp"><td colspan="${allc.length + 1}">${lab}</td></tr>`;
+  h += `<tr><td>RT MAE</td>${allc.map(c => `<td class="n ${c === bestc ? "win" : ""}">${f2(s[c].mae)}</td>`).join("")}</tr>`;
+  h += `<tr><td>RT RMSE</td>${allc.map(c => `<td class="n">${f2(s[c].rmse)}</td>`).join("")}</tr>`;
+  h += `<tr><td>Bias (RT &minus; forecast)</td>${allc.map(c => `<td class="n">${sg(s[c].bias, f2)}</td>`).join("")}</tr>`;
+  h += `<tr><td>80% band contains RT</td>${allc.map(c => `<td class="n">${s[c].cov80 === undefined ? "&ndash;" : pc(s[c].cov80)}</td>`).join("")}</tr>`;
+  for (const ref of ["da_base", "rt_base"]) {
+    h += `<tr><td>Gain vs ${SHORT[ref]}</td>${allc.map(c => { const g = s[c][`vs_${ref}`]; return `<td class="n ${sig(g) ? "win" : g && g.gain < -2 * g.se ? "lose" : ""}">${g ? gtxt(g) : "&ndash;"}</td>`; }).join("")}</tr>`;
+    h += `<tr><td>Days won vs ${SHORT[ref]}</td>${allc.map(c => { const g = s[c][`vs_${ref}`]; return `<td class="n">${g ? pc(g.win) : "&ndash;"}</td>`; }).join("")}</tr>`;
+  }
+  h += `<tr><td>MAE against DA instead</td>${allc.map(c => `<td class="n">${f2(s[c].mae_vs_da)}</td>`).join("")}</tr>`;
+}
+$("score").innerHTML = h + "</tbody>";
+
+// ---------- regimes
+const R = D.regime;
+h = `<thead><tr><th></th>${allc.map(c => `<th class="n">${SHORT[c]}</th>`).join("")}</tr></thead><tbody>`;
+const rowR = (lab, o) => { const bc = fc.concat("prod").reduce((a, c) => o[c] < o[a] ? c : a, "prod"); return `<tr><td>${lab}</td>${allc.map(c => `<td class="n ${c === bc ? "win" : ""}">${f2(o[c])}</td>`).join("")}</tr>`; };
+h += rowR(`Calm days (${R.calm.days})`, R.calm) + rowR(`Volatile days (${R.volatile.days}, top 10% by daily RT max)`, R.volatile) +
+  rowR(`Stressed hours (${D.stress.hours}, top 10% thermal stress)`, D.stress) + rowR("Full 2025 without the 10 worst days", D.excl10);
+$("regime").innerHTML = h + "</tbody>";
+const gv = R.volatile.rt_custom_vs_rt_base, gc = R.calm.rt_custom_vs_rt_base;
+$("regime-note").innerHTML = `RT MAE, $/MWh. Kumo conditions vs the RT-trained model: calm days ${gtxt(gc)}, volatile days ${gtxt(gv)} $/MWh a day. Volatile days are where RT departs from DA and where a better read of load, wind and solar should pay off, if anywhere.`;
+
+$("spike").innerHTML = `<thead><tr><th>Day</th><th class="n">RT max</th><th class="n">RT avg</th><th class="n">DA avg</th>${allc.map(c => `<th class="n">${SHORT[c]}</th>`).join("")}</tr></thead><tbody>` +
+  D.spike.map(r => {
+    const lab = new Date(r.d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+    const bc = fc.concat("prod").reduce((a, c) => r[c] < r[a] ? c : a, "prod");
+    return `<tr><td>${lab}</td><td class="n">${f0(r.rtmax)}</td><td class="n">${f0(r.rtmean)}</td><td class="n">${f0(r.damean)}</td>${allc.map(c => `<td class="n ${c === bc ? "win" : ""}">${f1(r[c])}</td>`).join("")}</tr>`;
+  }).join("") + "</tbody>";
+
+// ---------- specs and method
+const specs = [
+  ["--da", "Kumo trained on DA", "baseline_v0_daily", "DA system energy price", "Last 10,000 hours (D&minus;1 DA known)", "21 columns: production's 17 inputs + smoothed gas, date, hour, date counter", "Production inputs", "8 / 0", "2025 RT (and DA)"],
+  ["--rt", "Kumo trained on RT", "v0_rt_daily", "RT system energy price", "Last 10,000 hours ending D&minus;2", "Same 21 columns", "Same; context gap 24 h", "8 / 0", "2025 RT"],
+  ["--cu", "RT + Kumo conditions", "v0_custom_all_met_rt_daily", "RT system energy price", "Same", "Same, with Kumo load (P2), wind (W2) and solar (S2) q50 from Oct 2023 in place of Meteologica's; thermal stress, duck curve, its change and the next-hour solar change recomputed; + 6 columns: Kumo minus PJM and Kumo minus Meteologica for load, wind and solar", "Kumo forecasts' context ends D&minus;2; PJM forecasts by D&minus;1 11:00 EPT", "8 / 0", "2025 RT"],
+  ["--pf", "RT + perfect foresight", "v0_actuals_all_rt_daily", "RT system energy price", "Same", "Same, with actual load, wind and solar + actual minus PJM and actual minus Meteologica (6 columns). Diagnostic only", "Leaks the future", "8 / 0", "2025 RT"],
+  ["--prod", "Production", "flex.daep.20261001", "DA (RF + scaled heat-rate blend)", "730 days", "Production features", "D&minus;1 10:30 EPT", "&ndash;", "2025 RT"],
+];
+$("specs").innerHTML = specs.map(r => `<tr><td><span class="key" style="background:var(${r[0]})"></span>${r[1]}<span class="code">${r[2]}</span></td>${r.slice(3).map(x => `<td>${x}</td>`).join("")}</tr>`).join("");
+$("method").innerHTML = `
+<p><b>Target.</b> PJM RT system energy price, <span class="num">pjm_energy_prices.rt_energy_price</span> (as in shiny's <span class="num">rt_energy_prices()</span>), hourly, hour beginning EPT. 2025 mean $${f2(D.spread.mean_rt)} vs DA $${f2(D.spread.mean_da)}; hourly correlation with DA ${f2(D.spread.corr)}.</p>
+<p><b>Walk-forward.</b> For each 2025 day D, Kumo gets its inputs and actual prices for the last 10,000 eligible hours and forecasts D's 24 hours (median of its predictive distribution); then D is added and it moves on. The DA-trained model may use D&minus;1's DA prices (published on D&minus;2). The RT-trained models stop at the end of D&minus;2, because D&minus;1's RT prices are only partly known at 11:00 EPT on D&minus;1. Otherwise all Kumo runs match the original baseline: Kumo-Tabular large, 8 estimators, seed 0.</p>
+<p><b>Kumo conditions.</b> Kumo's load (Artifact 2), wind and solar (Artifact 4) forecasts were each produced day by day from October 2023 with context ending at D&minus;2, so every value in the price model's context and forecast could have existed that morning. PJM's forecasts use the latest version by D&minus;1 11:00 EPT, the bid deadline. Regional inputs keep Meteologica.</p>
+<p><b>Held-out days and uncertainty.</b> The 243 days of 2025 whose day number (1 January = 0) is not a multiple of 3. Paired day-block bootstrap (2,000 draws) of the daily MAE difference; &plusmn; is one standard error. Days won = share of days with the lower daily MAE. Nothing was selected on 2025 RT, and nothing touched the 2026 test set.</p>
+<p>Code: <span class="num">research/pjm_rt/</span> (make_rt.py, artifact5_data.py) and <span class="num">research/pjm_renew/make_custominputs.py</span>, branch pjm-feature-engineering.</p>`;
+
+// ---------- charts
+const pad = n => String(n).padStart(2, "0");
+const isoT = ms => { const d = new Date(ms); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00`; };
+function series(Hh, keys) {
+  const t0 = Date.parse(Hh.t0.replace(" ", "T") + "Z");
+  const hx = Hh.rt.map((_, i) => isoT(t0 + i * 3600e3));
+  const hourly = { x: hx }, daily = { x: [] };
+  for (const k of keys) hourly[k] = Hh[k];
+  for (let i = 0; i < hx.length; i += 24) daily.x.push(hx[i].slice(0, 10));
+  for (const k of keys) daily[k] = daily.x.map((_, j) => {
+    const v = hourly[k].slice(j * 24, j * 24 + 24).filter(x => x !== null);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  });
+  return { h: hourly, d: daily };
+}
+const TS = series(D.hourly, ["rt", "da", ...allc]);
+let res = "h";
+function baseLayout(extra = {}) {
+  const fg = css("--fg"), mu = css("--muted"), ru = css("--rule");
+  return Object.assign({
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { family: "IBM Plex Sans, system-ui, sans-serif", color: fg, size: 12 },
+    margin: { l: 56, r: 12, t: 10, b: 36 },
+    xaxis: { gridcolor: ru, linecolor: ru, zeroline: false, color: mu },
+    yaxis: { gridcolor: ru, linecolor: ru, zeroline: false, color: mu },
+    legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", bgcolor: "rgba(0,0,0,0)", font: { color: fg } },
+    hoverlabel: { bgcolor: css("--panel"), bordercolor: ru, font: { color: fg, family: "IBM Plex Mono, ui-monospace, monospace" } },
+  }, extra);
+}
+const CFG = { displayModeBar: false, responsive: true };
+function bars(el, rows) {
+  const ks = rows.map(r => r.k.replace(/ \(.*\)/, ""));
+  Plotly.react(el, fc.map(c => ({
+    type: "bar", orientation: "h", y: ks, x: rows.map(r => r[c]), name: SHORT[c], marker: { color: css(COL[c]) },
+    text: rows.map(r => f2(r[c])), textposition: "outside", cliponaxis: false, textfont: { color: css("--fg"), size: 11 },
+    hovertemplate: "%{x:.2f}<extra>" + NAME[c] + "</extra>",
+  })), baseLayout({
+    barmode: "group", bargap: 0.25, height: 60 + rows.length * 24 * fc.length, margin: { l: 56, r: 48, t: 10, b: 30 },
+    yaxis: { type: "category", autorange: "reversed", color: css("--fg"), linecolor: css("--rule"), gridcolor: "rgba(0,0,0,0)" },
+    legend: { orientation: "h", x: 0, y: -0.08, yanchor: "top", font: { color: css("--fg") } },
+  }), CFG);
+}
+function drawTS() {
+  const src = res === "h" ? TS.h : TS.d, hourly = res === "h";
+  const tr = [["rt", "Actual RT", "--actual", { line: { color: css("--actual"), width: 1.4 } }],
+    ["da", "Actual DA (after cutoff)", "--muted", { visible: "legendonly", line: { color: css("--muted"), width: 1.2, dash: "dot" } }],
+    ...allc.map(c => [c, NAME[c], COL[c], c === "rt_pf" || c === "prod" ? { visible: "legendonly" } : {}])];
+  Plotly.react($("c-ts"), tr.map(([k, name, col, extra]) => Object.assign({ x: src.x, y: src[k], name, type: "scatter", mode: "lines", line: { color: css(col), width: 1.5 }, hovertemplate: "%{y:.2f}" }, extra)),
+    baseLayout({
+      height: 460, hovermode: "x unified", margin: { l: 56, r: 12, t: 40, b: 10 },
+      xaxis: {
+        type: "date", hoverformat: hourly ? "%a %d %b %Y, %H:00" : "%a %d %b %Y", gridcolor: css("--rule"), color: css("--muted"),
+        range: hourly ? ["2025-06-20", "2025-07-04"] : ["2025-01-01", "2025-12-31 23:00"],
+        rangeslider: { visible: true, thickness: 0.08, bgcolor: css("--bg"), bordercolor: css("--rule") },
+        rangeselector: {
+          x: 1, xanchor: "right", y: 1.02, yanchor: "bottom", bgcolor: css("--panel"), activecolor: css("--rule"),
+          bordercolor: css("--rule"), borderwidth: 1, font: { color: css("--fg") },
+          buttons: [{ count: 7, label: "1w", step: "day", stepmode: "backward" }, { count: 1, label: "1m", step: "month", stepmode: "backward" },
+                    { count: 3, label: "3m", step: "month", stepmode: "backward" }, { step: "all", label: "all" }],
+        },
+      },
+      yaxis: { title: { text: "$/MWh" }, gridcolor: css("--rule"), color: css("--muted"), zeroline: false },
+    }), CFG);
+}
+["h", "d"].forEach(k => $(`res-${k}`).onclick = () => { res = k; ["h", "d"].forEach(b => $(`res-${b}`).setAttribute("aria-pressed", String(b === k))); drawTS(); });
+const drawAll = () => { bars($("c-season"), D.brk.season); bars($("c-hour"), D.brk.hour); drawTS(); };
+drawAll();
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawAll); } catch (e) {}
+new MutationObserver(drawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>
