@@ -1,6 +1,6 @@
 """RT datasets with actual PJM generation by fuel (perfect-foresight diagnostics; leak the future).
 
-  uv run python research/pjm_rt/make_genfuel.py
+  uv run python research/pjm_rt/make_genfuel.py [dataset ...]
 
 Source: pjm_hourly_generation_by_types (Data Miner gen_by_fuel), data/pjm_rt/gen_by_fuel.parquet, from 2023-06.
 Columns are filled from 2023-10-01 to 2025-12-31 (as make_custominputs.py: the RT baseline's 10k-hour context never
@@ -48,8 +48,7 @@ SETS = {"v0_genfuel_pf_rt": ["gen_gas", "gen_coal", "gen_nuclear", "gen_oil", "g
         "v0_supply_pf_rt": ["gen_nuclear", "net_imports"],
         "v0_stack_pf_rt": ["spare_gas", "spare_coal", "spare_oil", "spare_hydro", "spare_nuclear", "system_slack", "forced_outages_fc"]}
 
-import sys as _s
-only = _s.argv[1:]
+only = sys.argv[1:]  # optional dataset names; default all
 for name, use in SETS.items():
     if only and name not in only:
         continue
