@@ -17,6 +17,8 @@ southwest_east_diff_duckcurve_pjm uses Meteologica's regional forecasts and is u
                   = latest by D-1 11:00 EPT).
   v0_actuals_all  (--actuals; perfect-foresight diagnostic, leaks the future) actuals instead, plus
                   *_actual_minus_met and *_actual_minus_iso.
+  --minus-met     also add *_custom_minus_met (custom minus Meteologica ALL, v0's original column) to the custom
+                  dataset; --name overrides the output dataset name (RT study: v0_custom_all_met).
 Difference columns are missing before 2023-10-01 and where no ISO vintage exists.
 """
 
@@ -40,6 +42,8 @@ p.add_argument("--load")
 p.add_argument("--wind")
 p.add_argument("--solar")
 p.add_argument("--actuals", action="store_true")
+p.add_argument("--minus-met", action="store_true")
+p.add_argument("--name")
 p.add_argument("--data", default=str(ROOT / "data"))
 args = p.parse_args()
 DATA = Path(args.data)
@@ -112,9 +116,10 @@ out["solar_lag1_diff"] = np.where(win, S2.shift(-1) - S2, full["solar_lag1_diff"
 for t, c in COL.items():
     i = iso[t].reindex(ts).to_numpy()
     out[f"{t}_{tag}_minus_iso"] = np.where(win, out[c] - i, np.nan)
-    if args.actuals:
-        out[f"{t}_actual_minus_met"] = np.where(win, out[c] - full[c], np.nan)
+    if args.actuals or args.minus_met:
+        out[f"{t}_{tag}_minus_met"] = np.where(win, out[c] - full[c], np.nan)
 
+name = args.name or name
 dst = DATA / "pjm-fe" / name
 dst.mkdir(parents=True, exist_ok=True)
 for s, part in out.groupby("split", sort=False):
