@@ -17,6 +17,8 @@ southwest_east_diff_duckcurve_pjm uses Meteologica's regional forecasts and is u
                   = latest by D-1 11:00 EPT).
   v0_actuals_all  (--actuals; perfect-foresight diagnostic, leaks the future) actuals instead, plus
                   *_actual_minus_met and *_actual_minus_iso.
+  --only T,..     (with --actuals; RT spike ablations) replace / add difference columns for these of load, wind,
+                  solar only.  --errors-only: keep Meteologica's levels, add only the actual-minus columns.
   --minus-met     also add *_custom_minus_met (custom minus Meteologica ALL, v0's original column) to the custom
                   dataset; --name overrides the output dataset name (RT study: v0_custom_all_met).
 Difference columns are missing before 2023-10-01 and where no ISO vintage exists.
@@ -43,6 +45,8 @@ p.add_argument("--wind")
 p.add_argument("--solar")
 p.add_argument("--actuals", action="store_true")
 p.add_argument("--minus-met", action="store_true")
+p.add_argument("--only")
+p.add_argument("--errors-only", action="store_true")
 p.add_argument("--name")
 p.add_argument("--data", default=str(ROOT / "data"))
 args = p.parse_args()
@@ -98,13 +102,21 @@ else:
     name, tag = "v0_custom_all", "custom"
     new = {"load": custom(args.load), "wind": custom(args.wind), "solar": custom(args.solar).clip(lower=0)}
 
+assert not (args.only or args.errors_only) or args.actuals, "--only / --errors-only need --actuals"
+targets = args.only.split(",") if args.only else list(COL)
+assert set(targets) <= set(COL), targets
 out = full.copy()
-for t, c in COL.items():
+val = {}
+for t in targets:
+    c = COL[t]
     v = new[t].reindex(ts[win]).to_numpy()
     miss = np.isnan(v) & full.loc[win, c].notna().to_numpy()
     print(f"{t}: window rows {win.sum()}, replacement missing where v0 has a value: {miss.sum()} (kept Meteologica)")
     assert miss.sum() <= 6, f"{t}: too many missing hours"
-    out.loc[win, c] = np.where(np.isnan(v), full.loc[win, c].to_numpy(), v)
+    val[t] = full[c].copy()
+    val[t][win] = np.where(np.isnan(v), full.loc[win, c].to_numpy(), v)
+    if not args.errors_only:
+        out[c] = val[t]
 
 L2, W2, S2 = out["pjm_load"], out["pjm_wind"], out["pjm_solar"]
 out["thermal_stress_all_pjm"] = np.where(win, k_ts * (L2 - W2 - S2), full["thermal_stress_all_pjm"])
@@ -113,11 +125,12 @@ out["solarduckcurve.forecast.pjm"] = np.where(win, sdc2, sdc)
 out["solarduckcurve_lead1_diff.forecast.pjm"] = np.where(win, sdc2 - sdc2.shift(1), full["solarduckcurve_lead1_diff.forecast.pjm"])
 out["solar_lag1_diff"] = np.where(win, S2.shift(-1) - S2, full["solar_lag1_diff"])
 
-for t, c in COL.items():
+for t in targets:
+    c = COL[t]
     i = iso[t].reindex(ts).to_numpy()
-    out[f"{t}_{tag}_minus_iso"] = np.where(win, out[c] - i, np.nan)
+    out[f"{t}_{tag}_minus_iso"] = np.where(win, val[t] - i, np.nan)
     if args.actuals or args.minus_met:
-        out[f"{t}_{tag}_minus_met"] = np.where(win, out[c] - full[c], np.nan)
+        out[f"{t}_{tag}_minus_met"] = np.where(win, val[t] - full[c], np.nan)
 
 name = args.name or name
 dst = DATA / "pjm-fe" / name
@@ -127,7 +140,8 @@ for s, part in out.groupby("split", sort=False):
     part["ts"] = splits[s]["ts"].to_numpy()  # keep the original dtype
     part.to_parquet(dst / f"{s}.parquet", index=False)
 v = out[out["split"] == "val"]
-for t, c in COL.items():
+for t in targets:
+    c = COL[t]
     d = (v[c] - splits["val"][c].to_numpy())
     print(f"{name}: 2025 {t} |new - Meteologica| mean {d.abs().mean():.0f} MW, mean {d.mean():+.0f}; "
           f"{t}_{tag}_minus_iso missing in 2025: {v[f'{t}_{tag}_minus_iso'].isna().sum()}")
