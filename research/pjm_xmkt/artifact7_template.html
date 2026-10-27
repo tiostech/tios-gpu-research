@@ -1,0 +1,287 @@
+<title>PJM DA Forecast 2026</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/3.1.0/plotly-basic.min.js"></script>
+<style>
+/* Layout: single reading column in the house style of the PJM pages: answer, scorecard (2026 and 2025, trading
+   days and all days), month / hour breakdown, interactive 2026 series and rolling MAE, hardest days, specs, method. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --fg: #1b2230; --muted: #5d6676; --rule: #dde1e8;
+  --actual: #1b2230; --met: #b5562a; --iso: #7a5aa6; --kumo: #1f6f8b; --da: #b5562a; --rt: #1f6f8b; --cu: #2e7d4f; --pf: #8a6d2f; --prod: #9aa1ad;
+  --good: #2e7d4f; --bad: #a33a2b;
+  --display: "Fraunces", Georgia, serif; --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --panel: #1a2029; --fg: #e4e8ee; --muted: #9aa3b1; --rule: #2c3440;
+  --actual: #e4e8ee; --met: #e58a5c; --iso: #b39ddb; --kumo: #5fb3cf; --da: #e58a5c; --rt: #5fb3cf; --cu: #6cc48f; --pf: #d0ad62; --prod: #6b7380;
+  --good: #6cc48f; --bad: #e57b6b; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1a2029; --fg: #e4e8ee; --muted: #9aa3b1; --rule: #2c3440;
+  --actual: #e4e8ee; --met: #e58a5c; --iso: #b39ddb; --kumo: #5fb3cf; --da: #e58a5c; --rt: #5fb3cf; --cu: #6cc48f; --pf: #d0ad62; --prod: #6b7380;
+  --good: #6cc48f; --bad: #e57b6b; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1000px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 56px; display: grid; gap: 28px; }
+h1 { font-family: var(--display); font-weight: 600; font-size: 31px; line-height: 1.15; margin: 0; text-wrap: balance; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; font-weight: 600; }
+h3 { margin: 0; font-size: 16px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+a { color: var(--kumo); }
+.lede { color: var(--muted); display: grid; gap: 8px; }
+.lede b { color: var(--fg); }
+.part { font-family: var(--display); font-size: 22px; font-weight: 600; margin: 8px 0 -8px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 20px; min-width: 0; display: grid; gap: 16px; }
+.stack { display: grid; gap: 8px; }
+.sub { color: var(--muted); font-size: 13px; }
+.num, td.n, th.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 640px) { .figs { grid-template-columns: 1fr; } }
+.fig { border-top: 2px solid var(--fc, var(--kumo)); padding-top: 10px; display: grid; gap: 2px; }
+.fig .big { font-family: var(--display); font-size: 30px; line-height: 1.1; color: var(--fc, var(--kumo)); }
+.fig .lbl { font-size: 13px; color: var(--muted); }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+tr.grp td { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding-top: 14px; border-bottom: 0; font-weight: 600; }
+.win { color: var(--good); font-weight: 500; }
+.lose { color: var(--bad); }
+.key { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+.two > div { min-width: 0; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 5px 12px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--kumo); color: var(--panel); }
+.seg button:focus-visible { outline: 2px solid var(--kumo); outline-offset: -2px; }
+.bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.ctrls { display: flex; flex-wrap: wrap; gap: 8px; }
+.prose { display: grid; gap: 12px; }
+.prose ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 72ch; }
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.flow .box { flex: 1 1 150px; min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; align-content: start; }
+.flow .box b { font-size: 14px; }
+.flow .box span { font-size: 12.5px; color: var(--muted); }
+.flow .box.k { border-color: var(--kumo); }
+.flow .arr { align-self: center; color: var(--muted); font-size: 18px; }
+@media (max-width: 640px) { .flow { flex-direction: column; } .flow .arr { transform: rotate(90deg); align-self: center; } }
+.specs td { font-size: 13.5px; }
+.specs td:first-child { font-weight: 600; white-space: nowrap; }
+.specs .code { font-family: var(--mono); font-size: 12px; color: var(--muted); font-weight: 400; display: block; }
+.small { color: var(--muted); font-size: 13px; display: grid; gap: 8px; }
+.small p { max-width: none; }
+.plot { width: 100%; min-width: 0; }
+</style>
+
+<div class="wrap">
+  <header class="stack">
+
+<div class="wrap">
+  <header class="stack">
+    <h1 id="headline"></h1>
+    <div class="lede" id="lede"></div>
+  </header>
+
+  <div class="figs" id="figs"></div>
+
+  <section class="panel" aria-labelledby="h-score">
+    <div class="stack">
+      <h2 id="h-score">Scorecard</h2>
+      <p class="sub">$/MWh against the PJM day-ahead system energy price. Trading days = every day except Mondays (not traded). Gain = the other model's daily MAE minus this one's, averaged over days, &plusmn; one bootstrap standard error; it counts only above two. 80% band = share of hours inside the model's 10%&ndash;90% range (production publishes no comparable band here).</p>
+    </div>
+    <div class="tbl"><table id="score"></table></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-where">
+    <h2 id="h-where">2026 month by month and hour by hour (trading days)</h2>
+    <div class="two">
+      <div class="stack"><h3>By month</h3><div class="sub">MAE, $/MWh</div><div id="c-month" class="plot" role="img" aria-label="MAE by month for each model"></div></div>
+      <div class="stack"><h3>By hour of day (EPT, hour beginning)</h3><div class="sub">MAE, $/MWh</div><div id="c-hour" class="plot" role="img" aria-label="MAE by hour block for each model"></div></div>
+    </div>
+    <p class="sub" id="where-note"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-ts">
+    <div class="bar">
+      <div class="stack">
+        <h2 id="h-ts">2026, hour by hour</h2>
+        <p class="sub">$/MWh. The shaded band is the new model's 10%&ndash;90% range. Click a legend entry to show or hide a line; drag the slider to move through the year.</p>
+      </div>
+      <div class="seg" role="group" aria-label="Resolution">
+        <button type="button" id="res-h" aria-pressed="true">Hourly</button><button type="button" id="res-d" aria-pressed="false">Daily average</button>
+      </div>
+    </div>
+    <div id="c-ts" class="plot" role="img" aria-label="Hourly 2026 DA price with the three forecasts"></div>
+    <h3>Rolling 7-day MAE</h3>
+    <div id="c-roll" class="plot" role="img" aria-label="Rolling 7-day MAE of each model through 2026"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-worst">
+    <div class="bar">
+      <h2 id="h-worst">The hardest days of 2026 (trading days)</h2>
+      <div class="seg" role="group" aria-label="Ranking">
+        <button type="button" id="rk-prod" aria-pressed="true">Worst for production</button><button type="button" id="rk-new" aria-pressed="false">Worst for the new model</button><button type="button" id="rk-pb" aria-pressed="false">Where production did best</button>
+      </div>
+    </div>
+    <div class="tbl"><table id="worst"></table></div>
+    <p class="sub" id="worst-note"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-specs">
+    <h2 id="h-specs">Model specifications</h2>
+    <div class="tbl"><table class="specs" style="min-width:900px">
+      <thead><tr><th>Model</th><th>Method</th><th>Inputs</th><th>History used</th><th>Cutoff</th></tr></thead>
+      <tbody id="specs"></tbody>
+    </table></div>
+  </section>
+
+  <section class="small" aria-labelledby="h-method">
+    <h2 id="h-method">Method note</h2>
+    <div id="method" class="small"></div>
+  </section>
+</div>
+
+<script>
+const D = __DATA__;
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const f0 = v => Math.round(v).toLocaleString(), f1 = v => v.toFixed(1), f2 = v => v.toFixed(2), f3 = v => v.toFixed(3);
+const pc = v => Math.round(v * 100) + "%", sg = (v, f) => (v >= 0 ? "+" : "&minus;") + f(Math.abs(v));
+const sig = g => g && g.gain > 2 * g.se, neg = g => g && g.gain < -2 * g.se;
+const gtxt = g => `${sg(g.gain, f2)} &plusmn; ${f2(g.se)}`;
+const M = ["prod", "orig", "new"];
+const NAME = { prod: "Production DAFC", orig: "Kumo original", new: "Kumo + congestion + MISO / SPP" };
+const COL = { prod: "--da", orig: "--prod", new: "--kumo" };
+const T = D.sc.t.trade, TA = D.sc.t.all, V = D.sc.v.trade;
+const gNP = T.new_vs_prod, gNO = T.new_vs_orig, gOP = T.orig_vs_prod;
+const pct = (a, b) => 100 * (1 - a / b);
+
+// ---------- headline and lede
+$("headline").textContent = sig(gNP) ? "On 2026 trading days, Kumo with congestion and MISO / SPP forecasts beats production DAFC"
+  : neg(gNP) ? "On 2026 trading days, production DAFC beats Kumo with congestion and MISO / SPP forecasts"
+  : "On 2026 trading days, Kumo with congestion and MISO / SPP forecasts and production DAFC are level";
+$("lede").innerHTML = `<p>Three day-ahead forecasts of the PJM system energy price, scored on 2026 (${T.start} to ${T.end}), a year none of these models had seen and no research choice was made on: production DAFC (<span class="num">flex.daep.20261001</span>), the original Kumo baseline, and Kumo with five principal components of the trading desk's congestion forecasts plus Kumo's own MISO and SPP day-ahead price forecasts.</p>
+<p><b>Against production</b>, on the ${T.days} trading days: MAE ${f2(T.prod.mae)} vs ${f2(T.new.mae)} for the new model (${sg(pct(T.new.mae, T.prod.mae), f1)}%), RMSE ${f2(T.prod.rmse)} vs ${f2(T.new.rmse)}; daily gain ${gtxt(gNP)} $/MWh, ${pc(gNP.win)} of days won.</p>
+<p><b>Against the original Kumo baseline</b>: ${f2(T.orig.mae)} vs ${f2(T.new.mae)} (gain ${gtxt(gNO)}, ${pc(gNO.win)} of days), ${sig(gNO) ? "so the congestion and neighbour inputs carry over to 2026" : neg(gNO) ? "so the added inputs did worse in 2026 than on 2025" : "so the added inputs do not separate from the baseline in 2026"}. On 2025 the same model was ${f2(V.new.mae)} vs ${f2(V.orig.mae)} for the baseline and ${f2(V.prod.mae)} for production.</p>`;
+
+const fig = (b, l, c) => `<div class="fig" style="--fc:var(${c})"><span class="big">${b}</span><span class="lbl">${l}</span></div>`;
+$("figs").innerHTML = [
+  fig(`${sg(pct(T.new.mae, T.prod.mae), f1)}%`, `MAE vs production DAFC, 2026 trading days (${f2(T.prod.mae)} &rarr; ${f2(T.new.mae)})`, sig(gNP) ? "--kumo" : "--prod"),
+  fig(gtxt(gNP), `daily gain vs production, $/MWh; ${pc(gNP.win)} of days won`, sig(gNP) ? "--kumo" : "--prod"),
+  fig(gtxt(gNO), `daily gain vs the original Kumo baseline, $/MWh; ${pc(gNO.win)} of days won`, sig(gNO) ? "--kumo" : "--prod"),
+].join("");
+
+// ---------- scorecard
+let h = `<thead><tr><th></th>${M.map(c => `<th class="n"><span class="key" style="background:var(${COL[c]})"></span>${NAME[c]}</th>`).join("")}</tr></thead><tbody>`;
+const blocks = [["2026, trading days", D.sc.t.trade], ["2026, all days", D.sc.t.all], ["2025, trading days", D.sc.v.trade], ["2025, all days", D.sc.v.all]];
+for (const [lab, s] of blocks) {
+  const best = M.reduce((a, c) => s[c].mae < s[a].mae ? c : a, "prod");
+  h += `<tr class="grp"><td colspan="4">${lab} (${s.days} days, ${s.start} &ndash; ${s.end}; price avg $${f1(s.ymean)}, max $${f0(s.ymax)})</td></tr>`;
+  h += `<tr><td>MAE</td>${M.map(c => `<td class="n ${c === best ? "win" : ""}">${f2(s[c].mae)}</td>`).join("")}</tr>`;
+  h += `<tr><td>RMSE</td>${M.map(c => `<td class="n">${f2(s[c].rmse)}</td>`).join("")}</tr>`;
+  h += `<tr><td>Bias (actual &minus; forecast)</td>${M.map(c => `<td class="n">${sg(s[c].bias, f2)}</td>`).join("")}</tr>`;
+  h += `<tr><td>80% band contains actual</td>${M.map(c => `<td class="n">${s[c].cov80 === undefined ? "&ndash;" : pc(s[c].cov80)}</td>`).join("")}</tr>`;
+  const cell = g => `<td class="n ${sig(g) ? "win" : neg(g) ? "lose" : ""}">${gtxt(g)} <span class="sub">(${pc(g.win)})</span></td>`;
+  h += `<tr><td>Gain vs production (days won)</td><td class="n">&ndash;</td>${cell(s.orig_vs_prod)}${cell(s.new_vs_prod)}</tr>`;
+  h += `<tr><td>Gain vs Kumo original (days won)</td><td class="n">&ndash;</td><td class="n">&ndash;</td>${cell(s.new_vs_orig)}</tr>`;
+}
+$("score").innerHTML = h + "</tbody>";
+
+// ---------- breakdown notes
+const bm = D.by_month, best_m = bm.reduce((a, r) => r.new_vs_prod > a.new_vs_prod ? r : a, bm[0]), worst_m = bm.reduce((a, r) => r.new_vs_prod < a.new_vs_prod ? r : a, bm[0]);
+const won = bm.filter(r => r.new < r.prod).length;
+$("where-note").innerHTML = `The new model is ahead of production in ${won} of ${bm.length} months; its biggest edge is ${best_m.k} (${f2(best_m.prod)} vs ${f2(best_m.new)}), its weakest ${worst_m.k} (${f2(worst_m.prod)} vs ${f2(worst_m.new)}). Without production's ten worst days, MAE is ${f2(D.excl10.prod)} for production and ${f2(D.excl10.new)} for the new model (gain ${gtxt(D.excl10.new_vs_prod)}). Hourly errors of the new model and production correlate at ${f2(D.err_corr)}.`;
+
+// ---------- worst days
+let rk = "prod";
+function drawWorst() {
+  const rows = D.worst[rk === "pb" ? "prod_better" : rk];
+  $("worst").innerHTML = `<thead><tr><th>Day</th><th class="n">Price max</th><th class="n">Price avg</th>${M.map(c => `<th class="n">${NAME[c]}</th>`).join("")}</tr></thead><tbody>` +
+    rows.map(r => {
+      const lab = new Date(r.d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+      const bc = M.reduce((a, c) => r[c] < r[a] ? c : a, "prod");
+      return `<tr><td>${lab}</td><td class="n">${f0(r.ymax)}</td><td class="n">${f1(r.ymean)}</td>${M.map(c => `<td class="n ${c === bc ? "win" : ""}">${f1(r[c])}</td>`).join("")}</tr>`;
+    }).join("") + "</tbody>";
+  $("worst-note").innerHTML = "Daily MAE, $/MWh; the lowest error on each day is highlighted.";
+}
+for (const k of ["prod", "new", "pb"]) $(`rk-${k}`).onclick = () => { rk = k; ["prod", "new", "pb"].forEach(b => $(`rk-${b}`).setAttribute("aria-pressed", String(b === k))); drawWorst(); };
+drawWorst();
+
+// ---------- specs and method
+const specs = [
+  ["--da", "Production DAFC", "flex.daep.20261001", "Random forest + scaled heat-rate blend", "Production feature set", "730 days", "D&minus;1 10:30 EPT"],
+  ["--prod", "Kumo original", "baseline_v0", "Kumo-Tabular large (in-context tabular model), 8 estimators, seed 0; median of its predictive distribution", "Production's 17 inputs + smoothed gas, date, hour, date counter (21)", "Last 10,000 hours", "D&minus;1 11:00 EPT"],
+  ["--kumo", "Kumo + congestion + MISO / SPP", "v0_congfc5_xmkt26", "Same model and settings", "The 21 + 5 principal components of the trader congestion forecasts (shadow-price forecasts &times; shift factors, ~2,400 nodes) + Kumo's MISO and SPP DA energy forecast medians for the same hour (28)", "Last 10,000 hours", "D&minus;1 11:00 EPT (congestion forecasts made the morning before; MISO inputs 10:05 EST)"],
+];
+$("specs").innerHTML = specs.map(r => `<tr><td><span class="key" style="background:var(${r[0]})"></span>${r[1]}<span class="code">${r[2]}</span></td>${r.slice(3).map(x => `<td>${x}</td>`).join("")}</tr>`).join("");
+$("method").innerHTML = `
+<p><b>Target.</b> PJM day-ahead system energy component (<span class="num">pjm_energy_prices.da_energy_price</span>), hour beginning EPT. Scored on complete days; the 2026 data stops at ${TA.end}, when the dataset was cut.</p>
+<p><b>Walk-forward.</b> Each Kumo model forecasts day D's 24 hours from the 10,000 most recent hours known at the cutoff, then D is added and it moves on. The new model ran as one walk-forward from 1 January 2025 to ${TA.end}; the original baseline's 2026 forecasts come from its own test-set run (Artifact 3), identical in method.</p>
+<p><b>New inputs.</b> Congestion: the desk's pure shadow-based nodal congestion forecasts, generated the morning before and never revised; principal components fitted on October 2023 &ndash; December 2024 only and applied unchanged to 2025 and 2026. They are missing on untraded Mondays. MISO and SPP: Kumo's own DA energy forecasts for those markets (their production models' inputs), forecast day by day from October 2023, aligned to the same instant (MISO fixed EST, SPP Central).</p>
+<p><b>Uncertainty.</b> Paired day-block bootstrap (2,000 draws) of the daily MAE difference; &plusmn; is one standard error; days won = share of days with the lower daily MAE. Trading days exclude Mondays.</p>
+<p>Code: <span class="num">research/pjm_xmkt/</span> (make_xmkt.py, artifact7_data.py), <span class="num">research/pjm_rt/</span> (collect_congestion.R, make_congestion.py), <span class="num">research/{miso,spp}/make_original.py</span>; branch pjm-feature-engineering.</p>`;
+
+// ---------- charts
+function baseLayout(extra = {}) {
+  const fg = css("--fg"), mu = css("--muted"), ru = css("--rule");
+  return Object.assign({
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { family: "IBM Plex Sans, system-ui, sans-serif", color: fg, size: 12 },
+    margin: { l: 56, r: 12, t: 10, b: 36 },
+    xaxis: { gridcolor: ru, linecolor: ru, zeroline: false, color: mu },
+    yaxis: { gridcolor: ru, linecolor: ru, zeroline: false, color: mu },
+    legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", bgcolor: "rgba(0,0,0,0)", font: { color: fg } },
+    hoverlabel: { bgcolor: css("--panel"), bordercolor: ru, font: { color: fg, family: "IBM Plex Mono, ui-monospace, monospace" } },
+  }, extra);
+}
+const CFG = { displayModeBar: false, responsive: true };
+function bars(el, rows) {
+  Plotly.react(el, M.map(c => ({
+    type: "bar", x: rows.map(r => r.k), y: rows.map(r => r[c]), name: NAME[c], marker: { color: css(COL[c]) },
+    hovertemplate: "%{y:.2f}<extra>" + NAME[c] + "</extra>",
+  })), baseLayout({ barmode: "group", bargap: 0.2, height: 300, legend: { orientation: "h", x: 0, y: -0.15, yanchor: "top", font: { color: css("--fg") } },
+    xaxis: { type: "category", color: css("--fg"), linecolor: css("--rule") } }), CFG);
+}
+const pad = n => String(n).padStart(2, "0");
+const isoT = ms => { const d = new Date(ms); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00`; };
+const HH = D.hourly, t0 = Date.parse(HH.t0.replace(" ", "T") + "Z"), HX = HH.y.map((_, i) => isoT(t0 + i * 3600e3));
+const DLY = (() => {
+  const keys = ["y", ...M, "new_lo", "new_hi"], o = { x: [] };
+  keys.forEach(k => o[k] = []);
+  for (let i = 0; i < HX.length; i += 24) {
+    o.x.push(HX[i].slice(0, 10));
+    for (const k of keys) { const v = HH[k].slice(i, i + 24).filter(x => x !== null); o[k].push(v.length ? v.reduce((a, b) => a + b, 0) / v.length : null); }
+  }
+  return o;
+})();
+let res = "h";
+function drawTS() {
+  const hourly = res === "h", X = hourly ? HX : DLY.x, S = hourly ? HH : DLY;
+  const ln = (k, name, c, extra = {}) => Object.assign({ x: X, y: S[k], name, type: "scatter", mode: "lines", line: { color: css(c), width: 1.4 }, hovertemplate: "%{y:.2f}" }, extra);
+  Plotly.react($("c-ts"), [
+    ln("new_hi", "New model 90%", "--kumo", { line: { width: 0, color: css("--kumo") }, showlegend: false, hoverinfo: "skip", hovertemplate: null }),
+    ln("new_lo", "New model 10%&ndash;90%", "--kumo", { line: { width: 0, color: css("--kumo") }, fill: "tonexty", fillcolor: "rgba(31,111,139,0.14)", hoverinfo: "skip", hovertemplate: null }),
+    ln("y", "Actual DA price", "--actual", { line: { color: css("--actual"), width: 1.6 } }),
+    ln("prod", NAME.prod, "--da"),
+    ln("orig", NAME.orig, "--prod", { visible: "legendonly" }),
+    ln("new", NAME.new, "--kumo", { line: { color: css("--kumo"), width: 1.6 } }),
+  ], baseLayout({
+    height: 460, hovermode: "x unified", margin: { l: 56, r: 12, t: 40, b: 10 },
+    xaxis: { type: "date", hoverformat: hourly ? "%a %d %b %Y, %H:00" : "%a %d %b %Y", gridcolor: css("--rule"), color: css("--muted"),
+      range: hourly ? ["2026-01-20", "2026-02-03"] : [DLY.x[0], DLY.x[DLY.x.length - 1]],
+      rangeslider: { visible: true, thickness: 0.08, bgcolor: css("--bg"), bordercolor: css("--rule") } },
+    yaxis: { title: { text: "$/MWh" }, gridcolor: css("--rule"), color: css("--muted"), zeroline: false },
+  }), CFG);
+}
+function drawRoll() {
+  Plotly.react($("c-roll"), M.map(c => ({ x: D.daily.d, y: D.daily[c], name: NAME[c], type: "scatter", mode: "lines", line: { color: css(COL[c]), width: 1.8 }, hovertemplate: "%{y:.2f}" })),
+    baseLayout({ height: 260, hovermode: "x unified", yaxis: { title: { text: "$/MWh" }, gridcolor: css("--rule"), color: css("--muted"), zeroline: false },
+      xaxis: { type: "date", gridcolor: css("--rule"), color: css("--muted") } }), CFG);
+}
+["h", "d"].forEach(k => $(`res-${k}`).onclick = () => { res = k; ["h", "d"].forEach(b => $(`res-${b}`).setAttribute("aria-pressed", String(b === k))); drawTS(); });
+const drawAll = () => { bars($("c-month"), D.by_month); bars($("c-hour"), D.by_hour); drawTS(); drawRoll(); };
+drawAll();
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawAll); } catch (e) {}
+new MutationObserver(drawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>
