@@ -12,6 +12,7 @@ Alignment: same instant. PJM ts (EPT, prevailing) -> MISO fixed EST, SPP Central
 2023-10-01 to 2025-12-31 and missing before (as the other PJM diagnostics):
   miso_da_fc, spp_da_fc    neighbour DA energy forecast (q500) for the same hour
   miso_da_fc_q90, spp_da_fc_q90   their 90th percentiles (upside risk next door)
+  --quantiles 050,500,900,950 (v0_congfc10_xmktq) adds *_da_fc_q05 and *_da_fc_q95 (each neighbour's range).
 """
 
 import argparse
@@ -26,6 +27,7 @@ p = argparse.ArgumentParser()
 p.add_argument("--base", default="v0_congfc10")
 p.add_argument("--name", default="v0_congfc10_xmkt")
 p.add_argument("--data", default=str(ROOT / "data"))
+p.add_argument("--quantiles", default="500,900", help="neighbour quantiles, per mille: 500 -> {m}_da_fc, else {m}_da_fc_qNN")
 p.add_argument("--outputs", default=str(ROOT / "outputs"), help="dir holding miso-fe/ and spp-fe/ runs")
 a = p.parse_args()
 DATA, OUTS = Path(a.data), Path(a.outputs)
@@ -54,7 +56,9 @@ for s in ("train", "val", "test"):
     u = ts.tz_localize("America/New_York", ambiguous="NaT", nonexistent="NaT")
     for k, (_, tz) in SRC.items():
         key = u.tz_convert(tz).tz_localize(None)
-        for col, q in ((f"{k}_da_fc", "q500"), (f"{k}_da_fc_q90", "q900")):
+        for qq in a.quantiles.split(","):
+            q = f"q{int(qq):03d}"
+            col = f"{k}_da_fc" if q == "q500" else f"{k}_da_fc_q{int(qq) // 10:02d}"
             v = P[k][q].reindex(key).to_numpy()
             df[col] = np.where(win, v, np.nan)
     df.to_parquet(dst / f"{s}.parquet", index=False)
