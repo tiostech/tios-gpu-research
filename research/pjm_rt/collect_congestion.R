@@ -1,6 +1,7 @@
 # Cache PJM hourly nodal congestion locally (read-only "slave" replica; needs the SSH tunnel). Run from ~/dev/tios-quant-shiny:
 #   Rscript ~/dev/tios-gpu-research/research/pjm_rt/collect_congestion.R fc  [start end]
 #   Rscript ~/dev/tios-gpu-research/research/pjm_rt/collect_congestion.R act [start end]
+#   ... fc 2026-01-01 2026-10-10 allow-2026   (2026 = test year; for the 2026 production comparison only)
 # fc : pjm_hourly_congestion_forecasts.rt_congestion_forecast_pure_shadow_based (trader shadow-price forecasts x shift
 #      factors, no adjustments), keyed by trade_dt = the operating day; one stored value per (trade_dt, hr, node).
 # act: pjm_lmp_combined rt_congestion and da_congestion (actual), restricted to nodes that appear in the forecasts.
@@ -15,7 +16,8 @@ args <- commandArgs(trailingOnly = TRUE)
 kind <- args[1]
 start <- as.Date(if (length(args) >= 2) args[2] else "2023-09-01")
 end <- as.Date(if (length(args) >= 3) args[3] else "2025-12-31")
-stopifnot(kind %in% c("fc", "act"), end < as.Date("2026-01-01"))
+allow_test <- length(args) >= 4 && args[4] == "allow-2026"   # 2026 = test year: only when explicitly asked
+stopifnot(kind %in% c("fc", "act"), end < as.Date("2026-01-01") || allow_test)
 out <- file.path("~/dev/tios-gpu-research/data/pjm_rt/cong", kind)
 dir.create(out, recursive = TRUE, showWarnings = FALSE)
 

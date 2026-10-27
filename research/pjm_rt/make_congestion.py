@@ -31,10 +31,12 @@ from make_features import ts_of  # noqa: E402
 
 p = argparse.ArgumentParser()
 p.add_argument("--k", type=int, default=5)
+p.add_argument("--end", default="2026-01-01", help="fill scores up to (exclusive); later than 2026-01-01 only for the 2026 test comparison")
+p.add_argument("--name", help="override the dataset name")
 p.add_argument("--base", default="v0_rt", choices=["v0_rt", "v0"], help="v0_rt = RT target (default); v0 = DA target")
 a = p.parse_args()
 DATA = ROOT / "data"
-A, FIT_END, B = pd.Timestamp("2023-10-01"), pd.Timestamp("2025-01-01"), pd.Timestamp("2026-01-01")
+A, FIT_END, B = pd.Timestamp("2023-10-01"), pd.Timestamp("2025-01-01"), pd.Timestamp(a.end)
 OUT = ROOT / "outputs/pjm-rt/congestion"
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -52,6 +54,8 @@ for name, kind, col in (("v0_congpf_rt", "act", "rt"), ("v0_congfc_rt", "fc", "f
         name = name.replace("_rt", f"{a.k}_rt")      # e.g. v0_congfc10_rt; the 5-component sets keep their names
     if a.base == "v0":
         name = name.removesuffix("_rt")               # DA target: v0_congfc10 etc.
+    if a.name and kind == "fc":
+        name = a.name
     if not any((DATA / "pjm_rt/cong" / kind).glob("*.parquet")):
         print(f"{name}: no cached {kind} data, skipped")
         continue

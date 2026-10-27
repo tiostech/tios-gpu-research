@@ -27,11 +27,13 @@ p = argparse.ArgumentParser()
 p.add_argument("--base", default="v0_congfc10")
 p.add_argument("--name", default="v0_congfc10_xmkt")
 p.add_argument("--data", default=str(ROOT / "data"))
+p.add_argument("--end", default="2026-01-01", help="fill up to (exclusive); > 2026-01-01 adds the *_26_daily 2026 runs (test comparison)")
+p.add_argument("--test-into-val", action="store_true", help="val = val + test, so one walk-forward covers 2025 and 2026")
 p.add_argument("--quantiles", default="500,900", help="neighbour quantiles, per mille: 500 -> {m}_da_fc, else {m}_da_fc_qNN")
 p.add_argument("--outputs", default=str(ROOT / "outputs"), help="dir holding miso-fe/ and spp-fe/ runs")
 a = p.parse_args()
 DATA, OUTS = Path(a.data), Path(a.outputs)
-A, B = pd.Timestamp("2023-10-01"), pd.Timestamp("2026-01-01")
+A, B = pd.Timestamp("2023-10-01"), pd.Timestamp(a.end)
 SRC = {"miso": ("miso-fe/m0_original_bp_daily", "Etc/GMT+5"),
        "spp": ("spp-fe/s0_original_bp_daily", "America/Chicago")}
 
@@ -47,10 +49,19 @@ def run(path):
 
 
 P = {k: run(v[0]) for k, v in SRC.items()}
+if B > pd.Timestamp("2026-01-01"):                          # continue each backpublish with its 2026 walk-forward
+    for k, run26 in (("miso", "miso-fe/m0_original_26_daily"), ("spp", "spp-fe/s0_original_26_daily")):
+        p26 = pd.read_parquet(OUTS / run26 / "val_walk_forward_predictions.parquet")
+        p26 = p26.assign(ts=pd.to_datetime(p26["ts"])).drop_duplicates("ts").set_index("ts")
+        assert p26.index.min() <= pd.Timestamp("2026-01-01 01:00"), (run26, p26.index.min())
+        P[k] = pd.concat([P[k][P[k].index < p26.index.min()], p26])
 dst = DATA / "pjm-fe" / a.name
 dst.mkdir(parents=True, exist_ok=True)
+split = {s: pd.read_parquet(DATA / "pjm-fe" / a.base / f"{s}.parquet") for s in ("train", "val", "test")}
+if a.test_into_val:
+    split["val"], split["test"] = pd.concat([split["val"], split["test"]], ignore_index=True), split["test"].iloc[:0]
 for s in ("train", "val", "test"):
-    df = pd.read_parquet(DATA / "pjm-fe" / a.base / f"{s}.parquet")
+    df = split[s]
     ts = pd.DatetimeIndex(pd.to_datetime(df["ts"]))
     win = ((ts >= A) & (ts < B))
     u = ts.tz_localize("America/New_York", ambiguous="NaT", nonexistent="NaT")
