@@ -1,6 +1,7 @@
 """PJM DA datasets with Kumo's backpublished MISO and SPP DA energy forecasts as inputs (+ congestion PCs).
 
-  uv run python research/pjm_xmkt/make_xmkt.py [--base v0_congfc10] [--name v0_congfc10_xmkt]
+  uv run python research/pjm_xmkt/make_xmkt.py [--base v0_congfc10] [--name v0_congfc10_xmkt] [--data D --outputs O]
+  (on the GPU box: --data /scratch/data --outputs /scratch/outputs)
 
 MISO / SPP DA results for day D come out in the afternoon of D-1, after PJM's 11:00 EPT cutoff, so only a forecast
 can be used. The forecasts are the q500s of daily walk-forwards from 2023-10-01 (outputs/miso-fe/m0_original_bp_daily,
@@ -24,15 +25,17 @@ ROOT = Path(__file__).resolve().parents[2]
 p = argparse.ArgumentParser()
 p.add_argument("--base", default="v0_congfc10")
 p.add_argument("--name", default="v0_congfc10_xmkt")
+p.add_argument("--data", default=str(ROOT / "data"))
+p.add_argument("--outputs", default=str(ROOT / "outputs"), help="dir holding miso-fe/ and spp-fe/ runs")
 a = p.parse_args()
-DATA = ROOT / "data"
+DATA, OUTS = Path(a.data), Path(a.outputs)
 A, B = pd.Timestamp("2023-10-01"), pd.Timestamp("2026-01-01")
-SRC = {"miso": ("outputs/miso-fe/m0_original_bp_daily", "Etc/GMT+5"),
-       "spp": ("outputs/spp-fe/s0_original_bp_daily", "America/Chicago")}
+SRC = {"miso": ("miso-fe/m0_original_bp_daily", "Etc/GMT+5"),
+       "spp": ("spp-fe/s0_original_bp_daily", "America/Chicago")}
 
 
 def run(path):
-    path = ROOT / path
+    path = OUTS / path
     m = json.loads((path / "val_walk_forward_metrics.json").read_text())
     assert m["walk_forward"] and m.get("step_days", 1) == 1 and m.get("eval_every", 1) == 1, path
     pr = pd.read_parquet(path / "val_walk_forward_predictions.parquet")
