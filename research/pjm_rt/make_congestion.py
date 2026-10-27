@@ -1,7 +1,8 @@
 """RT datasets with the top principal components of PJM hourly nodal congestion.
 
   Rscript research/pjm_rt/collect_congestion.R fc|act      (from ~/dev/tios-quant-shiny; caches data/pjm_rt/cong/)
-  uv run python research/pjm_rt/make_congestion.py [--k 5]   (k != 5 -> v0_congfc<k>_rt)
+  uv run python research/pjm_rt/make_congestion.py [--k 5] [--base v0_rt|v0]   (k != 5 -> v0_congfc<k>_rt;
+                                                    --base v0 = DA target -> v0_congfc<k>)
 
 Each hour's nodal congestion field (one value per pnode) is reduced to K principal-component scores.
   v0_congpf_rt  v0_rt + PCs of the ACTUAL RT congestion (pjm_lmp_combined.rt_congestion) on day D. Perfect-foresight
@@ -30,6 +31,7 @@ from make_features import ts_of  # noqa: E402
 
 p = argparse.ArgumentParser()
 p.add_argument("--k", type=int, default=5)
+p.add_argument("--base", default="v0_rt", choices=["v0_rt", "v0"], help="v0_rt = RT target (default); v0 = DA target")
 a = p.parse_args()
 DATA = ROOT / "data"
 A, FIT_END, B = pd.Timestamp("2023-10-01"), pd.Timestamp("2025-01-01"), pd.Timestamp("2026-01-01")
@@ -48,6 +50,8 @@ def field(kind, col):
 for name, kind, col in (("v0_congpf_rt", "act", "rt"), ("v0_congfc_rt", "fc", "fc")):
     if a.k != 5:
         name = name.replace("_rt", f"{a.k}_rt")      # e.g. v0_congfc10_rt; the 5-component sets keep their names
+    if a.base == "v0":
+        name = name.removesuffix("_rt")               # DA target: v0_congfc10 etc.
     if not any((DATA / "pjm_rt/cong" / kind).glob("*.parquet")):
         print(f"{name}: no cached {kind} data, skipped")
         continue
@@ -80,7 +84,7 @@ for name, kind, col in (("v0_congpf_rt", "act", "rt"), ("v0_congfc_rt", "fc", "f
     dst = DATA / "pjm-fe" / name
     dst.mkdir(parents=True, exist_ok=True)
     for s_ in ("train", "val", "test"):
-        df = pd.read_parquet(DATA / "pjm-fe/v0_rt" / f"{s_}.parquet")
+        df = pd.read_parquet(DATA / "pjm-fe" / a.base / f"{s_}.parquet")
         ts = pd.to_datetime(df["ts"])
         win = ((ts >= A) & (ts < B)).to_numpy()
         for c in sc:
