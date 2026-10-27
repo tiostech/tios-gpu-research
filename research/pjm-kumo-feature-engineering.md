@@ -599,3 +599,17 @@ New beats production in 8 of 10 months of 2026 (behind in Jan, 22.08 vs 21.87, a
 New vs original is not significant in 2026 alone (noisy year: max $1,501, Jan cold snap). The 2025 slice validates this
 exact configuration (5 PCs + neighbour medians): +0.20 ± 0.07 over the baseline. Error correlation new vs prod 0.80.
 Artifact 7: https://claude.ai/artifact/Nhs6Hu2Q2sBYJsCuEh99zq
+
+## 2026 test: 50/50 blend of Kumo RT and DA forecasts, scored on RT (`research/pjm_rt/blend26.py`)
+
+RT side: `v0_congfc5_xmkt_rt26_daily` (new config: RT target, 5 congestion PCs + MISO / SPP DA medians, gap 24,
+walk-forward 2025-01-01..2026-10-08). DA side: `v0_congfc5_xmkt26_daily`. Trading days, MAE / RMSE, gains ± 1 SE:
+
+| | RT Kumo | DA Kumo | 50/50 | DA price |
+|---|---|---|---|---|
+| 2026 (241 d, RT max $3,470) | 27.97 / 99.3 | 28.92 / 98.4 | 27.67 / 96.6 | 26.86 / 93.4 |
+| 2025 (313 d) | 11.98 / 30.9 | 13.06 / 35.3 | 11.89 / 31.9 | 12.59 / 34.3 |
+
+2026: blend vs DA price MAE −0.81 ± 0.99, RMSE −3.2 ± 3.4 (level, DA price nominally ahead); blend vs RT +0.30 ± 0.76;
+blend vs DA Kumo +1.25 ± 0.85. 2025: blend beats the DA price (+0.70 ± 0.24). 2026 RT is far more volatile (440 hours
+≥ $150 against 148 in 2025); the DA price's edge there is in spike hours (MAE 181 vs 194), level in normal hours.
