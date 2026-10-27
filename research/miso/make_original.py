@@ -1,6 +1,9 @@
 """MISO "original" Kumo dataset: the baseline Lucas RF features of MisoFlexDaep20251101 + time features.
 
-  uv run python research/miso/make_original.py [data/miso/miso_raw.parquet] [name]
+  uv run python research/miso/make_original.py [data/miso/miso_raw.parquet] [name] [val_start]
+
+val_start (default 2025-01-01) moves the train / val boundary earlier for backpublishing, e.g. 2023-10-01 for
+the PJM cross-market features (research/pjm_xmkt/), so a daily walk-forward forecasts every day from then on.
 
 Mirrors the PJM original (data/pjm-fe/v0): target y = da_energy_price, the RF's 12 regressors, plus
 ts (hour-beginning, MISO fixed-EST clock; Kumo expands it to epoch/hour/dow/month/doy), dt, hr and
@@ -15,6 +18,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 src = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "data/miso/miso_raw.parquet"
 name = sys.argv[2] if len(sys.argv) > 2 else "m0_original"
+val_start = pd.Timestamp(sys.argv[3]) if len(sys.argv) > 3 else pd.Timestamp("2025-01-01")
 
 RF_FEATURES = [  # lucas_rf_predict formula in miso-flex-daep-20251101.R
     "thermal_stress_all_miso", "sdi_macro", "miso_load", "miso_wind", "miso_solar",
@@ -37,7 +41,7 @@ df = df[df["ts"] >= "2017-12-31"]
 
 dst = ROOT / "data/miso-fe" / name
 dst.mkdir(parents=True, exist_ok=True)
-a, b = pd.Timestamp("2025-01-01"), pd.Timestamp("2026-01-01")
+a, b = val_start, pd.Timestamp("2026-01-01")
 for split, m in (("train", df["ts"] < a), ("val", (df["ts"] >= a) & (df["ts"] < b)), ("test", df["ts"] >= b)):
     df[m].to_parquet(dst / f"{split}.parquet", index=False)
     print(f"{split}: {m.sum()} rows, {df.loc[m, 'ts'].min()} .. {df.loc[m, 'ts'].max()}, "
