@@ -13,7 +13,7 @@ The context is the most recent --max-context rows (sorted by --time-col if
 given).  Datetime columns are expanded into numeric features, since the model
 only accepts numerical/categorical inputs.
 
-Outputs: val_<mode>_predictions.parquet (mean + selected quantiles) and
+Outputs: val_<mode>_predictions.parquet (mean + selected quantiles + tail CVaRs) and
 val_<mode>_metrics.json (MAE of median, RMSE of mean, pinball loss, 80%
 coverage).
 """
@@ -30,6 +30,11 @@ import torch
 import sdm
 
 SAVE_QUANTILES = ["q050", "q100", "q250", "q500", "q750", "q900", "q950"]
+EXTRA_QUANTILES = ["q010", "q025", "q975", "q990"]
+# Tail expectations from the 999-quantile grid: cvar_hi050 = mean of the upper 5% (q951..q999, CVaR / expected
+# shortfall of the upper tail), cvar_lo050 = mean of the lower 5% (q001..q049).
+CVAR_HI = [f"q{q:03d}" for q in range(951, 1000)]
+CVAR_LO = [f"q{q:03d}" for q in range(1, 50)]
 PINBALL_QUANTILES = [f"q{q:03d}" for q in range(100, 1000, 100)]
 
 
@@ -360,6 +365,10 @@ def main() -> None:
 
     out = pd.DataFrame({"mean": quantiles.mean(axis=1)})
     out = pd.concat([out, quantiles[SAVE_QUANTILES]], axis=1)
+    if set(EXTRA_QUANTILES + CVAR_HI + CVAR_LO) <= set(quantiles.columns):
+        out = pd.concat([out, quantiles[EXTRA_QUANTILES]], axis=1)
+        out["cvar_hi050"] = quantiles[CVAR_HI].mean(axis=1)
+        out["cvar_lo050"] = quantiles[CVAR_LO].mean(axis=1)
     results = {}
     if args.target in val:
         y = val[args.target].to_numpy(dtype=float)
