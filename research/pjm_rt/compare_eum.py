@@ -114,11 +114,19 @@ for nm, m in S.items():
     # bootstrap the information difference: refit on day resamples (weights)
     days = pd.factorize(day[m])[0]
     nd = days.max() + 1
-    diffs = []
+    diffs, gd = [], {c: [] for c in C}
     for _ in range(100):
         w = np.bincount(rng.integers(0, nd, nd), minlength=nd)[days].astype(float)
-        Ls = [esr(np.column_stack([np.ones(m.sum()), C[c][m].to_numpy()]), y, w)[2] for c in ("EUM", "Kumo")]
+        Ls = []
+        for c in ("EUM", "Kumo"):
+            _, g_, L_ = esr(np.column_stack([np.ones(m.sum()), C[c][m].to_numpy()]), y, w)
+            Ls.append(L_)
+            gd[c].append(g_)
         diffs.append(Ls[0] - Ls[1])
+    for c in C:
+        G = np.array(gd[c])
+        print(f"  {nm} {c:4} bootstrap 95%: intercept g {np.percentile(G[:, 0], 2.5):+.2f} .. {np.percentile(G[:, 0], 97.5):+.2f}, "
+              f"slope d {np.percentile(G[:, 1], 2.5):.3f} .. {np.percentile(G[:, 1], 97.5):.3f}")
     print(f"  {nm} FZ0 EUM minus Kumo (positive = Kumo more informative): {fits['EUM'] - fits['Kumo']:+.4f} "
           f"(bootstrap 95% {np.percentile(diffs, 2.5):+.4f} .. {np.percentile(diffs, 97.5):+.4f})")
 
