@@ -578,3 +578,6 @@ Built and queued on the box after the backpublishes (/scratch/logs/xmkt_pjm_chai
 - Neighbour forecasts sharpen the predictive distribution (tails), not the median; congestion moves the median.
   Median: congfc10 and xmkt tied. Distribution: xmkt best DA model so far.
 - 2025 corr with PJM DA: MISO fc 0.83, SPP fc 0.47 -> MISO-only / SPP-only ablation would settle SPP's value.
+- v0_congfc10_xmktq (+ neighbour q05 / q95, `make_xmkt.py --quantiles 050,500,900,950`): ties v0_congfc10_xmkt
+  everywhere (HOLD non-Mon median +0.032 +- 0.026, q90 +0.013 +- 0.009, q95 -0.002 +- 0.006; nothing above 2 SE).
+  Keep the simpler xmkt (q50 + q90). Mondays: not traded, so trader-input gaps are by design; read non-Mon rows first.
