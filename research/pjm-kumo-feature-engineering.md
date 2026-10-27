@@ -529,3 +529,22 @@ PSEG) vs DOM/BGE/PEPCO; PC3 BGE/PEPCO vs west (COMED/AEP/OVEC). **Pure-shadow co
   of days), not the median; q05 unchanged. Congestion forecasts carry upside-risk information.
 - 10 vs 5 PCs: everything leans to 10 (+1-2 SE), only q05 (tiny) above 2 SE. Use 10.
 - Same pattern pre-run: PCs uncorrelated with the RT model's signed error, correlated with |error| (0.13-0.25).
+
+**DA model + 10 congestion PCs** (v0_congfc10_daily vs s3_stage/baseline_v0_daily, DA target, no context gap):
+
+| | median MAE | pinball q95 | avg pinball 7q | MAE of mean |
+|---|---|---|---|---|
+| HOLD | +0.148 +- 0.061 (4.61 -> 4.46) | +0.038 +- 0.017 | +0.036 +- 0.013 | +0.144 +- 0.085 |
+| HOLD non-Mon | +0.167 +- 0.066 | +0.061 +- 0.018 | +0.045 +- 0.015 | +0.209 +- 0.091 |
+| ALL non-Mon | +0.151 +- 0.059 | +0.044 +- 0.021 | +0.038 +- 0.015 | +0.202 +- 0.080 |
+
+- **First input in this programme to improve the DA median significantly** (Kumo load/wind/solar and even perfect
+  foresight of load/wind/solar did not). ALL incl. Mondays +0.102 +- 0.056 (Mondays carry no forecast: diluted).
+- Mechanism fits: congestion expectations are bid into DA (median moves); in RT they flag upside risk (tail moves).
+- Next: fix / backfill the Monday-null pure-shadow column; DA stage to production candidate.
+
+**EUM comparison** (compare_eum.py; EUM flex.eum.cvar.20261001 backfill trained through 2025, so in-sample on 2025):
+point forecast, HOLD: Kumo median MAE 12.25 vs EUM 13.64 (+1.39 +- 0.26/day); EUM bias +10.9 (forecasts low).
+EUM upper 5% CVaR regression backtest: ES = -0.69 + 1.008 x CVaR (HOLD) -- calibrated on average; by decile it
+overshoots deciles 8-9 (150/127, 194/156) and undershoots the top (352/484). Kumo CVaR comparison pending
+(v0_congfc_rt_tail_daily: re-run saving cvar_hi050 = mean of q951..q999).
