@@ -499,3 +499,33 @@ Ablations (RT target, HOLD gain vs v0_rt_daily, daily MAE):
 - day_gen_capacity posts daily for the previous day (10:00 download held data through D-1 HE24 only), so usable
   headroom is D-2; the D-1-morning version was caught before running. D-2 proxy: spike-day AUC 0.75 alone but no
   gain in the model.
+
+## RT: fuel mix, supply stack, and trader congestion forecasts (2026-10-26)
+
+**Generation by fuel** (`make_genfuel.py`, perfect foresight; HOLD gain vs v0_rt_daily):
+- v0_genfuel_pf_rt (actual gas/coal/nuclear/oil/hydro/other + net imports): +0.785 +- 0.170, RMSE 34.77, but vs
+  v0_pf_load_rt only +0.09 +- 0.14 (total gen + net imports = actual load, so the gain is mostly load; the rest is
+  partly circular: gas/oil/hydro respond to RT).
+- v0_supply_pf_rt (nuclear + net imports): -0.100 +- 0.047.
+- v0_stack_pf_rt (spare by fuel = 30-day max output minus output, PJM-only; system slack = econ max minus total gen;
+  PJM forced-outage report): +0.413 +- 0.190, ties actual headroom (+0.14 +- 0.21), spike-hr MAE 157.5 (worse).
+- Univariate (spikes_ramp.py, + "band+head" control): spare gas/coal/nuclear add nothing beyond total headroom; spare
+  oil / hydro significant but they are dispatch responses. IIR not used (stale, phone-survey based: on 2025-06-24
+  HE18 IIR showed ~2 GW offline vs PJM's 11.3 GW forced).
+
+**Trader congestion forecasts** (`collect_congestion.R fc`, `make_congestion.py`, `score_dist.py`):
+pjm_hourly_congestion_forecasts.rt_congestion_forecast_pure_shadow_based (generated the morning before, never revised;
+trade_dt = operating day), cached 2023-09..2025-12 in data/pjm_rt/cong/fc (151 MB). PCA fitted 2023-10..2024-12 on
+2,358 nodes (>= 95% present). Top-5 explain 77%, top-10 87%. PC1 DPL/BGE/PEPCO congested; PC2 east (PECO/AECO/DPL/
+PSEG) vs DOM/BGE/PEPCO; PC3 BGE/PEPCO vs west (COMED/AEP/OVEC). **Pure-shadow column is null on every Monday through
+2025** (other forecast columns filled; fixed by Oct 2026) -> Monday scores missing.
+
+| vs v0_rt_daily, HOLD | median MAE | pinball q95 | pinball q90 | avg pinball 7q | MAE of mean |
+|---|---|---|---|---|---|
+| v0_congfc_rt (5 PCs) | +0.028 +- 0.058 | +0.205 +- 0.060 | +0.190 +- 0.081 | +0.084 +- 0.036 | +0.657 +- 0.230 |
+| v0_congfc10_rt (10 PCs) | +0.065 +- 0.076 | +0.223 +- 0.069 | +0.203 +- 0.091 | +0.096 +- 0.039 | +0.696 +- 0.244 |
+
+- First usable input to significantly improve the RT forecast: the upper tail (q95 pinball ~5% better, wins 67-68%
+  of days), not the median; q05 unchanged. Congestion forecasts carry upside-risk information.
+- 10 vs 5 PCs: everything leans to 10 (+1-2 SE), only q05 (tiny) above 2 SE. Use 10.
+- Same pattern pre-run: PCs uncorrelated with the RT model's signed error, correlated with |error| (0.13-0.25).
