@@ -581,3 +581,21 @@ Built and queued on the box after the backpublishes (/scratch/logs/xmkt_pjm_chai
 - v0_congfc10_xmktq (+ neighbour q05 / q95, `make_xmkt.py --quantiles 050,500,900,950`): ties v0_congfc10_xmkt
   everywhere (HOLD non-Mon median +0.032 +- 0.026, q90 +0.013 +- 0.009, q95 -0.002 +- 0.006; nothing above 2 SE).
   Keep the simpler xmkt (q50 + q90). Mondays: not traded, so trader-input gaps are by design; read non-Mon rows first.
+
+## 2026 test: Kumo + congestion PCs + MISO / SPP vs production DAFC (Artifact 7)
+
+`v0_congfc5_xmkt26_daily`: baseline inputs + 5 congestion PCs + MISO / SPP q500 (backpublishes continued through 2026 by
+m0_original_26_daily / s0_original_26_daily; MISO 2026 MAE 7.67, SPP 4.52). One walk-forward 2025-01-01..2026-10-08.
+Daily-MAE gains, paired day-block bootstrap, ± 1 SE:
+
+| block | prod | orig | new | new−prod | new−orig | orig−prod |
+|---|---|---|---|---|---|---|
+| 2026 trading (241 d) | 9.86 | 9.17 | 8.71 | +1.15 ± 0.46 (71% days) | +0.45 ± 0.38 | +0.69 ± 0.59 |
+| 2026 all (281 d) | 10.20 | 9.48 | 9.06 | +1.14 ± 0.41 | +0.42 ± 0.38 | +0.72 ± 0.53 |
+| 2025 trading (313 d) | 5.22 | 4.57 | 4.37 | +0.85 ± 0.18 | +0.20 ± 0.07 | +0.65 ± 0.14 |
+| 2025 all (365 d) | 5.43 | 4.67 | 4.53 | +0.89 ± 0.17 | +0.14 ± 0.06 | +0.75 ± 0.15 |
+
+New beats production in 8 of 10 months of 2026 (behind in Jan, 22.08 vs 21.87, and in Oct to date, 14.36 vs 12.93).
+New vs original is not significant in 2026 alone (noisy year: max $1,501, Jan cold snap). The 2025 slice validates this
+exact configuration (5 PCs + neighbour medians): +0.20 ± 0.07 over the baseline. Error correlation new vs prod 0.80.
+Artifact 7: https://claude.ai/artifact/Nhs6Hu2Q2sBYJsCuEh99zq
