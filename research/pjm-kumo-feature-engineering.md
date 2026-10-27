@@ -556,3 +556,25 @@ directions, +0.109 +- 0.017 (Jul-Dec, 71% of days) and +0.110 +- 0.046 (Jan-Jun,
 (ES = 15 + 0.64 x CVaR / 10 + 0.63 x CVaR). Raw Kumo (own q950, uncorrected) also beats corrected EUM in Jul-Dec
 (+0.063 +- 0.021), tie in Jan-Jun (+0.072 +- 0.053). Verdict: Kumo better on the point forecast and on tail
 information; ship its CVaR with a linear correction (~0.63 slope), refitted on trailing data.
+
+## PJM DA + MISO / SPP DA forecasts + congestion PCs (2026-10-27) -- `research/pjm_xmkt/make_xmkt.py`
+
+Backpublished neighbour DA forecasts: `research/{miso,spp}/make_original.py ... <name> 2023-10-01` ->
+m0_original_bp / s0_original_bp; daily walk-forwards (production-RF inputs, defaults, no gap) from 2023-10-01:
+outputs/miso-fe/m0_original_bp_daily (MAE pre-2025 2.111, 2025 3.385; 2025 q500 identical to m0_original),
+outputs/spp-fe/s0_original_bp_daily (pre-2025 4.217, 2025 3.933; 2025 max diff vs s0_original 0.06).
+v0_congfc10_xmkt = v0_congfc10 + miso_da_fc / spp_da_fc (q500) and their q900, same instant (PJM EPT -> MISO fixed
+EST, SPP Central prevailing; empirical check: winter MISO best at 0 shift, SPP shapes align by local clock), filled
+2023-10-01..2025-12-31. MISO inputs are 10:05 EST = 11:05 EDT in summer, 5 min after PJM's cutoff (negligible).
+Built and queued on the box after the backpublishes (/scratch/logs/xmkt_pjm_chain.sh).
+
+| HOLD gain | median MAE | pinball q95 | pinball q90 | pinball q05 | avg pinball 7q |
+|---|---|---|---|---|---|
+| v0_congfc10 vs baseline | +0.148 +- 0.061 | +0.038 +- 0.017 | +0.035 +- 0.025 | +0.008 +- 0.006 | +0.036 +- 0.013 |
+| v0_congfc10_xmkt vs baseline | +0.103 +- 0.081 | +0.074 +- 0.014 | +0.076 +- 0.021 | +0.019 +- 0.006 | +0.051 +- 0.017 |
+| xmkt vs congfc10 | -0.045 +- 0.054 | +0.036 +- 0.018 | +0.041 +- 0.021 | +0.011 +- 0.005 | +0.014 +- 0.012 |
+
+- ALL: xmkt vs baseline median +0.158 +- 0.073, q95 +0.077 +- 0.018, mean +0.284 +- 0.086 (all significant).
+- Neighbour forecasts sharpen the predictive distribution (tails), not the median; congestion moves the median.
+  Median: congfc10 and xmkt tied. Distribution: xmkt best DA model so far.
+- 2025 corr with PJM DA: MISO fc 0.83, SPP fc 0.47 -> MISO-only / SPP-only ablation would settle SPP's value.
