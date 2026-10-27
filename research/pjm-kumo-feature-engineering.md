@@ -546,5 +546,13 @@ PSEG) vs DOM/BGE/PEPCO; PC3 BGE/PEPCO vs west (COMED/AEP/OVEC). **Pure-shadow co
 **EUM comparison** (compare_eum.py; EUM flex.eum.cvar.20261001 backfill trained through 2025, so in-sample on 2025):
 point forecast, HOLD: Kumo median MAE 12.25 vs EUM 13.64 (+1.39 +- 0.26/day); EUM bias +10.9 (forecasts low).
 EUM upper 5% CVaR regression backtest: ES = -0.69 + 1.008 x CVaR (HOLD) -- calibrated on average; by decile it
-overshoots deciles 8-9 (150/127, 194/156) and undershoots the top (352/484). Kumo CVaR comparison pending
-(v0_congfc_rt_tail_daily: re-run saving cvar_hi050 = mean of q951..q999).
+overshoots deciles 8-9 (150/127, 194/156) and undershoots the top (352/484); bootstrap 95% slope 0.79-1.26.
+Kumo (v0_congfc_rt_tail_daily = v0_congfc_rt re-run saving cvar_hi050 = mean of q951..q999; quantiles reproduce
+exactly): ES = +13.7 + 0.615 x CVaR (slope 95% 0.51-0.78) -> Kumo's raw CVaR is too high (mean 171 vs EUM 127; RT
+above it 0.6% of hours vs 1.5%), but more informative: FZ0 after linear recalibration 4.554 vs 4.658 (EUM - Kumo
++0.104, 95% +0.042..+0.155); encompassing ES = 1.2 + 0.22 x EUM + 0.54 x Kumo. Spike AUC tie (~0.93 / 0.98).
+Out-of-sample correction (fit one half of 2025, score the other): corrected Kumo beats corrected EUM in both
+directions, +0.109 +- 0.017 (Jul-Dec, 71% of days) and +0.110 +- 0.046 (Jan-Jun, 61%); correction stable
+(ES = 15 + 0.64 x CVaR / 10 + 0.63 x CVaR). Raw Kumo (own q950, uncorrected) also beats corrected EUM in Jul-Dec
+(+0.063 +- 0.021), tie in Jan-Jun (+0.072 +- 0.053). Verdict: Kumo better on the point forecast and on tail
+information; ship its CVaR with a linear correction (~0.63 slope), refitted on trailing data.

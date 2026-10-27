@@ -160,3 +160,22 @@ for nm, mm in S.items():
     for c, cv in L_.items():
         r_ = rt[mm]
         print(f"  {nm} {c:4}: mean {cv[mm].mean():6.1f} | RT below it {(r_ < cv[mm]).mean():.2%}")
+
+# ---------------- 2d. out-of-sample recalibration (Kumo's CVaR is too high as issued, so a correction learned on
+# one half-year is applied to the other; EUM gets the same treatment). Kumo raw = its own q950 and CVaR, uncorrected.
+print("\n2d. Upper CVaR, out-of-sample linear recalibration (fit on one half of 2025, FZ0 on the other)")
+for fit_m, test_m, lab in ((idx.month <= 6, idx.month > 6, "Jan-Jun -> Jul-Dec"), (idx.month > 6, idx.month <= 6, "Jul-Dec -> Jan-Jun")):
+    fm, tm = ok & fit_m, ok & test_m
+    res = {}
+    for c, cv in C.items():
+        b, g, _ = esr(np.column_stack([np.ones(fm.sum()), cv[fm].to_numpy()]), rt[fm].to_numpy())
+        Xt = np.column_stack([np.ones(tm.sum()), cv[tm].to_numpy()])
+        res[c] = pd.Series(fz0(Xt @ b, Xt @ g, rt[tm].to_numpy()), index=idx[tm]).groupby(day[tm]).mean()
+        print(f"  {lab} {c:4}: correction ES = {g[0]:+.2f} + {g[1]:.3f} x CVaR; out-of-sample FZ0 {res[c].mean():.4f}")
+    res["Kumo raw"] = pd.Series(fz0(k["q950"][tm].to_numpy(), C["Kumo"][tm].to_numpy(), rt[tm].to_numpy()),
+                                index=idx[tm]).groupby(day[tm]).mean()
+    print(f"  {lab} Kumo raw (own q950, uncorrected): FZ0 {res['Kumo raw'].mean():.4f}")
+    for other in ("Kumo", "Kumo raw"):
+        g_, se = boot(res["EUM"] - res[other])
+        print(f"  {lab} EUM (corrected) minus {other}: {g_:+.4f} +- {se:.4f} (positive = {other} better); "
+              f"days {other} better {((res['EUM'] - res[other]) > 0).mean():.0%}")
