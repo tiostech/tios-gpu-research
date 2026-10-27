@@ -1,7 +1,7 @@
 """RT datasets with the top principal components of PJM hourly nodal congestion.
 
   Rscript research/pjm_rt/collect_congestion.R fc|act      (from ~/dev/tios-quant-shiny; caches data/pjm_rt/cong/)
-  uv run python research/pjm_rt/make_congestion.py [--k 5]
+  uv run python research/pjm_rt/make_congestion.py [--k 5]   (k != 5 -> v0_congfc<k>_rt)
 
 Each hour's nodal congestion field (one value per pnode) is reduced to K principal-component scores.
   v0_congpf_rt  v0_rt + PCs of the ACTUAL RT congestion (pjm_lmp_combined.rt_congestion) on day D. Perfect-foresight
@@ -46,6 +46,8 @@ def field(kind, col):
 
 
 for name, kind, col in (("v0_congpf_rt", "act", "rt"), ("v0_congfc_rt", "fc", "fc")):
+    if a.k != 5:
+        name = name.replace("_rt", f"{a.k}_rt")      # e.g. v0_congfc10_rt; the 5-component sets keep their names
     if not any((DATA / "pjm_rt/cong" / kind).glob("*.parquet")):
         print(f"{name}: no cached {kind} data, skipped")
         continue
