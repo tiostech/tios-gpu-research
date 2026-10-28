@@ -678,3 +678,7 @@ longs via demand bids (virtual DECs are not in this feed). `offers_link.py` (pjm
 edge. Unit markup vs own 30-day median: 0.66 within deciles, rho with DA +0.35, DA edge 0.82 -> 0.80; it is ~all gas
 (corr 0.95 with gas / 30-day median). Fair version gas_rel = log(gas at cutoff / previous-30-day median): 0.64 within
 Kumo deciles -> Kumo under-uses gas jumps. Most of the DA edge remains unexplained by bids and offers.
+
+Gas jump run (`make_gasjump.py`, gasjump_daily: + gas_rel30, gas_chg1) vs v0_congfc5_xmkt_rt26_daily, 2025: null.
+HOLD median −0.04 ± 0.04, q95 +0.02 ± 0.02, 7q −0.01 ± 0.01, q05 −0.008 ± 0.003 (slightly worse); spike AUC 0.935 ->
+0.935, hit rate 11% -> 11%. The 0.64 within-decile AUC did not translate into model gains.
