@@ -85,9 +85,10 @@ YEARS = (("2026", "2026-01-01", "2026-10-09"), ("2025", "2025-01-01", "2026-01-0
 prod = pd.read_parquet(ROOT / "data/pjm_extra/prod_flex_daep.parquet")
 prod = prod.assign(ts=pd.to_datetime(prod["dt"]) + pd.to_timedelta(prod["hr"] - 1, unit="h")).drop_duplicates("ts").set_index("ts")["forecast"]
 for yr in YEARS:
-    report("rt", *yr, ["k_rt", "t_rt", "k_bl", "t_bl", "kt_bl"],
+    report("rt", *yr, ["k_rt", "t_rt", "k_da", "kt_da", "k_bl", "t_bl", "kt_bl"],
            [("t_bl", "daprc"), ("t_bl", "t_rt"), ("t_bl", "k_bl"), ("kt_bl", "k_bl"), ("kt_bl", "t_bl"), ("kt_bl", "k_rt"),
-            ("kt_bl", "daprc"), ("k_bl", "daprc"), ("t_rt", "k_rt")], "daprc", raw["da_energy_price"])
+            ("kt_bl", "daprc"), ("k_bl", "daprc"), ("t_rt", "k_rt"),
+            ("kt_da", "daprc"), ("kt_da", "k_da"), ("kt_da", "k_rt"), ("kt_da", "k_bl"), ("kt_bl", "kt_da")], "daprc", raw["da_energy_price"])
 for yr in YEARS:
     report("da", *yr, ["k_da", "t_da", "kt_da"], [("t_da", "k_da"), ("kt_da", "k_da"), ("kt_da", "prod"), ("k_da", "prod"), ("t_da", "prod")],
            "prod", prod)
