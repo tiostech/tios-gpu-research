@@ -667,3 +667,14 @@ Perfect foresight, gains vs v0_congfc5_xmkt_rt26_daily (2025, ± 1 SE):
 | respf_mgn (30-min/PR/SR margins) | +0.56 ± 0.39 | +0.75 ± 0.17 | +0.37 ± 0.12 | +0.41 ± 0.21 | 14% |
 
 MCPs are close to the target (co-optimised). Margins: large tail gain (q95 3.5x the congestion PCs' +0.21), median ~2 SE.
+
+## Where does the DA price's spike edge come from? Demand bids and generator offers (2025 diagnostics)
+
+DA price AUC for RT ≥ 150 within Kumo-q95 deciles: 0.82. `dmd_bids_link.py` (pjm_da_demands = hrl_dmd_bids, posts with
+DA results): demand bids run 3.8% under PJM's load forecast, slightly further under on spike hours (within-decile AUC
+0.44), uncorrelated with the DA price within deciles (−0.14); DA edge with excess-demand control 0.816. Not informed
+longs via demand bids (virtual DECs are not in this feed). `offers_link.py` (pjm_da_gs_generator_bids, ~350 groups,
+135 GW): stack shape (MW ≥ $100 / $200, price at 90/95% of offered MW) ~0.52-0.56 within deciles, no effect on the DA
+edge. Unit markup vs own 30-day median: 0.66 within deciles, rho with DA +0.35, DA edge 0.82 -> 0.80; it is ~all gas
+(corr 0.95 with gas / 30-day median). Fair version gas_rel = log(gas at cutoff / previous-30-day median): 0.64 within
+Kumo deciles -> Kumo under-uses gas jumps. Most of the DA edge remains unexplained by bids and offers.
