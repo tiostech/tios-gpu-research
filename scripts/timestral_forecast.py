@@ -43,6 +43,13 @@ def main() -> None:
         help="Forecast from the target history alone",
     )
     p.add_argument("--days", type=int, help="Only forecast the first N val days")
+    p.add_argument(
+        "--context-gap-hours",
+        type=int,
+        default=0,
+        help="Target history ends this many steps before each forecast day (e.g. 24 for "
+        "RT: D-1's RT is not known at the cutoff); the gap is forecast and discarded",
+    )
     args = p.parse_args()
 
     splits = {s: read_split(args.data_dir, s) for s in ("train", "val")}
@@ -88,19 +95,20 @@ def main() -> None:
     parts = []
     for i, (day, idx) in enumerate(days, 1):
         start, end = idx.iloc[0], idx.iloc[-1] + 1
-        lo = max(0, start - args.max_context)
+        ctx_end = start - args.context_gap_hours
+        lo = max(0, ctx_end - args.max_context)
         kwargs = {}
         if known is not None:
             kwargs["known_covariates"] = known[None, :, lo:end]
         if known_cat is not None:
             kwargs["categorical_known_covariates"] = known_cat[None, :, lo:end]
         forecast = model.forecast(
-            y[None, None, lo:start],
-            prediction_length=end - start,
+            y[None, None, lo:ctx_end],
+            prediction_length=end - ctx_end,
             clip_nonnegative=False,
             **kwargs,
         )
-        parts.append(forecast.quantiles[0, 0].cpu().numpy())  # (h, Q)
+        parts.append(forecast.quantiles[0, 0, start - ctx_end :].cpu().numpy())  # (h, Q)
         print(f"timestral: {i}/{len(days)} days ({pd.Timestamp(day):%Y-%m-%d})")
 
     quantiles = pd.DataFrame(np.concatenate(parts), columns=names)
