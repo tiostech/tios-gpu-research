@@ -613,3 +613,23 @@ walk-forward 2025-01-01..2026-10-08). DA side: `v0_congfc5_xmkt26_daily`. Tradin
 2026: blend vs DA price MAE −0.81 ± 0.99, RMSE −3.2 ± 3.4 (level, DA price nominally ahead); blend vs RT +0.30 ± 0.76;
 blend vs DA Kumo +1.25 ± 0.85. 2025: blend beats the DA price (+0.70 ± 0.24). 2026 RT is far more volatile (440 hours
 ≥ $150 against 148 in 2025); the DA price's edge there is in spike hours (MAE 181 vs 194), level in normal hours.
+
+## Timestral-209M vs Kumo, and blends (`research/pjm_rt/blend_ts.py`)
+
+Timestral on the same datasets as the Kumo 2026 runs (5 congestion PCs + MISO / SPP medians), 15 months of history
+(--max-context 10950; 32k was ~4x slower), RT with --context-gap-hours 24 (new option). Walk-forward 2025-01-01..2026-10-08.
+Trading days, MAE (gains ± 1 SE):
+
+| | 2026 RT | 2025 RT | 2026 DA | 2025 DA |
+|---|---|---|---|---|
+| Kumo (own target) | 27.97 | 11.98 | 8.71 | 4.37 |
+| Timestral (own target) | 27.58 | 12.51 | 9.30 | 4.59 |
+| Kumo RT+DA 50/50 | 27.67 | 11.89 | | |
+| Timestral RT+DA 50/50 | 27.59 | 12.08 | | |
+| Kumo + Timestral, 4-way / DA 2-way | 27.51 | 11.91 | 8.66 | 4.30 |
+| DA price / production DAFC | 26.86 | 12.59 | 9.86 | 5.22 |
+
+RT: no blend separates from the DA price in 2026 (4-way −0.65 ± 0.92); 2025 4-way beats it +0.68 ± 0.24. Timestral
+alone is worse than Kumo on 2025 RT (−0.53 ± 0.23) and DA (−0.23 ± 0.10), level in 2026. Adding Timestral to Kumo is
+level on MAE everywhere (+0.06..+0.16, < 1 SE); small pinball gain on DA (+0.03 ± 0.02 2025, +0.10 ± 0.05 2026).
+Timestral's 80% band covers only 75% (Kumo 85%).
