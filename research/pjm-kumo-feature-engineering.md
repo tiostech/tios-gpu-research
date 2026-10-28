@@ -633,3 +633,18 @@ RT: no blend separates from the DA price in 2026 (4-way −0.65 ± 0.92); 2025 4
 alone is worse than Kumo on 2025 RT (−0.53 ± 0.23) and DA (−0.23 ± 0.10), level in 2026. Adding Timestral to Kumo is
 level on MAE everywhere (+0.06..+0.16, < 1 SE); small pinball gain on DA (+0.03 ± 0.02 2025, +0.10 ± 0.05 2026).
 Timestral's 80% band covers only 75% (Kumo 85%).
+
+## D-1 morning RT (idea 1; `make_d1morning.py`), 2025, vs v0_congfc5_xmkt_rt26_daily
+
+Features d1m_* (D-1 hours beginning 00..08: RT mean / max / 08:00 / RT−DA) and/or target rows: --context-gap-hours 15
+keeps D-1 00..08 in context. Gains ± 1 SE (* > 2 SE):
+
+| run | HOLD median | HOLD q95 | HOLD 7q | ALL non-Mon median | ALL non-Mon q95 | ALL non-Mon 7q |
+|---|---|---|---|---|---|---|
+| d1m_feat (features, gap 24) | +0.03 ± 0.05 | +0.09 ± 0.03* | +0.03 ± 0.02 | −0.01 ± 0.04 | +0.03 ± 0.03 | +0.00 ± 0.02 |
+| d1m_rows (gap 15) | +0.00 ± 0.09 | +0.06 ± 0.04 | +0.03 ± 0.03 | +0.12 ± 0.09 | +0.10 ± 0.04* | +0.06 ± 0.02* |
+| d1m_both | +0.01 ± 0.12 | +0.15 ± 0.05* | +0.05 ± 0.03 | +0.06 ± 0.11 | +0.11 ± 0.04* | +0.05 ± 0.03 |
+
+Upper tail improves (both: q95 +0.15 HOLD, + mean MAE +0.38); median unchanged. Spike discrimination barely moves:
+q95 ≥ 150 hit rate 11% → 12%, AUC 0.935 → 0.938 (the DA price at ≥ 150 hits 61%). The DA price's selectivity is not
+explained by D-1 morning RT.
