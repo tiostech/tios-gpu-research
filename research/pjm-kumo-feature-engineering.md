@@ -648,3 +648,22 @@ keeps D-1 00..08 in context. Gains ± 1 SE (* > 2 SE):
 Upper tail improves (both: q95 +0.15 HOLD, + mean MAE +0.38); median unchanged. Spike discrimination barely moves:
 q95 ≥ 150 hit rate 11% → 12%, AUC 0.935 → 0.938 (the DA price at ≥ 150 hits 61%). The DA price's selectivity is not
 explained by D-1 morning RT.
+
+## RT reserve market results (`collect_reserves.R`, `reserves_link.py`, `make_reserves.py`)
+
+Snowflake copies of Data Miner feeds (no API key): PJM_FIVEMIN_DISPATCHED_RESERVES (primary / synchronized / 30-min,
+RTO and Mid-Atlantic/Dominion, 2021-05+; 30-min 2022-10+) and PJM_HOURLY_REGULATION_RESERVES. Same-hour link to RT ≥ 150
+(2025 AUC): regulation MCP 0.955 (includes energy opportunity cost: near-mechanical), 30-min margin 0.916, MAD SR / PR
+MCP 0.80-0.81, RTO 0.76-0.78, shortage flags ~0.5. DA price 0.946.
+Within Kumo-q95 deciles: DA price 0.82 > same-hour 30-min margin 0.74; DA edge survives a margin control (0.81).
+Fair lags of the margin (D-1 morning, D-2, 7-day min) add nothing over Kumo (within-decile 0.52-0.56). D+1 margin vs D
+spikes, controlling D: 2025 nothing, 2023-25 tighter D+1 -> fewer D spikes (coef +1.35 [0.49, 1.99]) but no AUC gain.
+
+Perfect foresight, gains vs v0_congfc5_xmkt_rt26_daily (2025, ± 1 SE):
+
+| run | HOLD median | HOLD q95 | HOLD 7q | non-Mon median | q95 ≥ 150 hit |
+|---|---|---|---|---|---|
+| respf_mcp (reg + SR/PR MCPs) | +3.89 ± 0.51 | +2.04 ± 0.21 | +1.52 ± 0.18 | +3.50 ± 0.28 | 25% |
+| respf_mgn (30-min/PR/SR margins) | +0.56 ± 0.39 | +0.75 ± 0.17 | +0.37 ± 0.12 | +0.41 ± 0.21 | 14% |
+
+MCPs are close to the target (co-optimised). Margins: large tail gain (q95 3.5x the congestion PCs' +0.21), median ~2 SE.
