@@ -33,3 +33,19 @@ day number is not a multiple of 3 (243 days), as for PJM.
   alone (3.461 vs 3.455) and worse on RMSE (7.96 vs 7.34) -> use Kumo alone.
 - Bias (y - fc): Kumo +0.24, production +0.39.
 Predictions: box /scratch/outputs/miso-fe/m0_original, local outputs/miso-fe/m0_original.
+
+## RT energy price backpublish, 2024-2025 (2026-11-05) -- `research/miso_rt/`
+- `collect_rt.R` -> data/miso/miso_energy_prices.parquet (miso_energy_prices dt, hr, da/rt_energy_price,
+  2017-12-01 .. 2026-10-20, no gaps). `make_original.py ... m0_original_bp24 2024-01-01 2026-01-01` then
+  `make_rt.py m0_original_bp24` -> data/miso-fe/m0_original_bp24_rt: m0_original features, y = RT system energy
+  (source y == DA price on every row, so alignment is right).
+- Run `m0_rt_bp24_daily`: daily walk-forward 2024-01-01 .. 2025-12-31, `--context-gap-hours 24` (context ends D-2),
+  large / 8 est / seed 0 / 10k context. 731 steps in 53 min.
+- `score_rt.py`, scored on RT, trading days (non-Monday), MAE / RMSE; gain = paired day bootstrap:
+| | Kumo RT q500 | Kumo RT mean | 50/50 RT+DA Kumo | Kumo DA q500 | DA price |
+|---|---|---|---|---|---|
+| 2024 | 7.63 / 26.6 | 13.09 / 35.2 | 7.99 / 26.0 | 8.94 / 26.1 | 8.60 / 25.6 |
+| 2025 | 11.42 / 41.0 | 19.23 / 45.1 | 11.66 / 39.7 | 12.89 / 39.3 | 12.55 / 38.9 |
+  Kumo RT vs DA price +0.97 +- 0.14 (2024), +1.13 +- 0.31 (2025); blend vs DA price +0.61 +- 0.11, +0.89 +- 0.18.
+  RMSE: DA price slightly best. The quantile-average mean over-forecasts (bias -6 / -9) -> use q500.
+  80% coverage 0.85 / 0.87. Bias of q500 +3.4 / +5.5 (under-forecasts, right-skewed RT).
